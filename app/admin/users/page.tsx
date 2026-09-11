@@ -1,0 +1,1116 @@
+// @ts-nocheck
+"use client";
+
+import Link from "next/link";
+import { useState, useEffect } from "react";
+import HeartistLogo from "@/components/HeartistLogo";
+import AdminBottomNav from "@/components/AdminBottomNav";
+import { supabase } from "@/lib/supabase";
+
+const ROLES = [
+  { id: "first-timer", label: "First timer 🐣", emoji: "🐣" },
+  { id: "camp-veteran", label: "Camp veteran 🎖️", emoji: "🎖️" },
+  { id: "supporter", label: "Supporter 💖", emoji: "💖" },
+  { id: "pastor", label: "Pastor 📖", emoji: "📖" },
+  { id: "camp-coordinator", label: "Camp coordinator 🎯", emoji: "🎯" },
+  { id: "facilitator", label: "Facilitator ⭐", emoji: "⭐" },
+  { id: "media-team", label: "Media team 📸", emoji: "📸" },
+  { id: "music-team", label: "Music team 🎵", emoji: "🎵" },
+  { id: "dance-ministry", label: "Dance ministry 💃", emoji: "💃" }
+];
+
+const TEAMS = [
+  "none", "green", "red", "blue", "yellow", "brown", 
+  "black", "white", "skyblue", "pink", "orange"
+];
+
+export default function AdminUsersPage() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  
+  // Modals state
+  const [manageUser, setManageUser] = useState<any | null>(null);
+  const [editBadge, setEditBadge] = useState("");
+  const [isEditBadgeDropdownOpen, setIsEditBadgeDropdownOpen] = useState(false);
+  const [editTeam, setEditTeam] = useState("");
+  const [isEditTeamDropdownOpen, setIsEditTeamDropdownOpen] = useState(false);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [banUser, setBanUser] = useState<any | null>(null);
+  const [banReason, setBanReason] = useState("");
+  const [banDays, setBanDays] = useState("3");
+  const [toastMessage, setToastMessage] = useState("");
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(""), 3000);
+  };
+
+  // Search and Filter State
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sortBy, setSortBy] = useState("recent"); // "recent", "name", "age", "badge", "team"
+  const [isSortDropdownOpen, setIsSortDropdownOpen] = useState(false);
+  
+  const [ageFilter, setAgeFilter] = useState("all");
+  const [isAgeDropdownOpen, setIsAgeDropdownOpen] = useState(false);
+  
+  const [badgeFilter, setBadgeFilter] = useState("all");
+  const [isBadgeDropdownOpen, setIsBadgeDropdownOpen] = useState(false);
+  
+  const [teamFilter, setTeamFilter] = useState("all");
+  const [isTeamDropdownOpen, setIsTeamDropdownOpen] = useState(false);
+
+  
+  useEffect(() => {
+    if (manageUser || banUser) {
+      document.body.style.overflow = "hidden";
+      document.documentElement.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "auto";
+      document.documentElement.style.overflow = "auto";
+    }
+    return () => { 
+      document.body.style.overflow = "auto"; 
+      document.documentElement.style.overflow = "auto";
+    };
+  }, [manageUser, banUser]);
+
+  const fetchUsers = async () => {
+    try {
+      const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
+      if (data && !error) {
+        const mappedUsers = data.map(p => ({
+          id: p.id,
+          firstName: p.first_name,
+          lastName: p.last_name,
+          email: p.email,
+          contact: p.contact_number,
+          age: p.age,
+          birthDate: p.birth_date,
+          badge: p.badge,
+          avatar: p.avatar_url,
+          isBanned: p.is_banned,
+          bannedUntil: p.banned_until,
+          team: p.team || "none"
+        }));
+        setUsers(mappedUsers);
+      }
+    } catch(e) {
+      console.error("Error fetching users", e);
+    }
+  };
+
+  
+  const handleSaveUserUpdates = async () => {
+    if (!manageUser) return;
+    setIsSavingUser(true);
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ badge: editBadge, team: editTeam })
+        .eq('id', manageUser.id);
+      
+      if (!error) {
+        // Send notifications if changed
+        const mBadge = manageUser.badge || "first-timer";
+        const mTeam = manageUser.team || "none";
+        if (mBadge !== editBadge || mTeam !== editTeam) {
+          const notifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
+          const activeAdmin = localStorage.getItem("activeAdmin");
+          const activeUserStr = localStorage.getItem("activeUser");
+          let adminName = activeAdmin || "Admin";
+          if (activeAdmin && activeUserStr) {
+             const au = JSON.parse(activeUserStr);
+             if (au.id === `admin_${activeAdmin}`) {
+               adminName = au.firstName || adminName;
+             }
+          } else if (activeUserStr) {
+             adminName = JSON.parse(activeUserStr).firstName || "Admin";
+          }
+          const targetUserName = `${manageUser.firstName} ${manageUser.lastName || ''}`.trim();
+          
+          if (mBadge !== editBadge) {
+            const badgeLabel = ROLES.find(r => r.id === editBadge)?.label || editBadge;
+            notifs.push({
+              id: Date.now() + Math.random(),
+              type: "badge_update",
+              users: [adminName, targetUserName],
+              postAuthor: targetUserName,
+              postContent: badgeLabel,
+              timestamp: Date.now(),
+              read: false,
+              postId: "profile"
+            });
+          }
+
+          if (mTeam !== editTeam) {
+            notifs.push({
+              id: Date.now() + Math.random() + 1,
+              type: editTeam === "none" ? "team_remove" : "team_add",
+              users: [adminName, targetUserName],
+              postAuthor: targetUserName,
+              postContent: editTeam === "none" ? "" : editTeam,
+              timestamp: Date.now(),
+              read: false,
+              postId: "profile"
+            });
+          }
+          localStorage.setItem("communityNotifications", JSON.stringify(notifs));
+          window.dispatchEvent(new Event("storage"));
+        }
+
+        setUsers(users.map(u => u.id === manageUser.id ? { ...u, badge: editBadge, team: editTeam } : u));
+        setManageUser(null);
+        
+        // Broadcast the team change globally for real-time update
+        const accsStr = localStorage.getItem("registeredAccounts");
+        if (accsStr) {
+          let accs = JSON.parse(accsStr);
+          const match = accs.find((a: any) => a.firstName === manageUser.firstName && a.lastName === manageUser.lastName);
+          if (match) {
+            match.badge = editBadge;
+            match.team = editTeam;
+          } else {
+             accs.push({ firstName: manageUser.firstName, lastName: manageUser.lastName, avatar: manageUser.avatar || manageUser.avatar_url, badge: editBadge, team: editTeam });
+          }
+          localStorage.setItem("registeredAccounts", JSON.stringify(accs));
+          
+          // ALSO UPDATE communityPosts locally!
+          let postsStr = localStorage.getItem("communityPosts");
+          if (postsStr) {
+            let posts = JSON.parse(postsStr);
+            const enrich = (item: any, nameProp="name") => {
+                if (item[nameProp] === `${manageUser.firstName} ${manageUser.lastName}` || item[nameProp] === manageUser.firstName || item.authorId === manageUser.firstName) {
+                    item.team = editTeam;
+                    item.role = editBadge;
+                }
+            };
+            posts.forEach((post: any) => {
+              enrich(post, "name");
+              (post.comments || []).forEach((comment: any) => {
+                enrich(comment, "author");
+                (comment.replies || []).forEach((reply: any) => {
+                  enrich(reply, "author");
+                });
+              });
+            });
+            localStorage.setItem("communityPosts", JSON.stringify(posts));
+          }
+          window.dispatchEvent(new Event("storage"));
+        }
+      }
+    } catch(e) {
+      console.error("Error updating user", e);
+    }
+    setIsSavingUser(false);
+  };
+
+  useEffect(() => {
+    if (localStorage.getItem("isAdminLoggedIn") !== "true") {
+      window.location.href = "/login";
+    } else {
+      setIsLoggedIn(true);
+      fetchUsers();
+    }
+  }, []);
+
+  const handleBanSubmit = async () => {
+    if (!banUser) return;
+    
+    const days = parseInt(banDays);
+    const bannedUntil = new Date();
+    bannedUntil.setDate(bannedUntil.getDate() + days);
+
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_banned: true,
+          banned_until: bannedUntil.toISOString(),
+          ban_reason: banReason || "Violation of community guidelines."
+        })
+        .eq('id', banUser.id);
+        
+      if (!error) {
+        setBanUser(null);
+        setBanReason("");
+        setBanDays("3");
+        fetchUsers(); // Refresh the list
+      } else {
+        showToast("Failed to ban user.");
+      }
+    } catch (e) {
+      console.error(e);
+      showToast("Error processing ban.");
+    }
+  };
+
+  const handleUnban = async (userId: string) => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_banned: false,
+          banned_until: null,
+          ban_reason: null
+        })
+        .eq('id', userId);
+        
+      if (!error) {
+        fetchUsers(); // Refresh the list
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // ----- RENDERING LOGIC & HELPER -----
+
+  
+  const calculateAge = (birthDate, legacyAge) => {
+    if (birthDate) {
+      const birth = new Date(birthDate);
+      const today = new Date();
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+        age--;
+      }
+      return age;
+    }
+    return parseInt(legacyAge) || -1;
+  };
+
+  const getAgeBracket = (ageStr: string | number) => {
+    const age = parseInt(ageStr) || -1;
+    if (age < 0) return "Unknown";
+    if (age <= 9) return "0-9";
+    if (age <= 19) return "10-19";
+    if (age <= 29) return "20-29";
+    if (age <= 39) return "30-39";
+    if (age <= 49) return "40-49";
+    if (age <= 59) return "50-59";
+    return "60+";
+  };
+
+  const sortedUsers = [...users].sort((a, b) => {
+    if (sortBy === "name") {
+      const nameA = `${a.firstName || ""} ${a.lastName || ""}`.toLowerCase();
+      const nameB = `${b.firstName || ""} ${b.lastName || ""}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    } else if (sortBy === "age") {
+      const ageA = calculateAge(a.birthDate, a.age) === -1 ? 999 : calculateAge(a.birthDate, a.age);
+      const ageB = calculateAge(b.birthDate, b.age) === -1 ? 999 : calculateAge(b.birthDate, b.age);
+      return ageA - ageB;
+    } else if (sortBy === "badge") {
+      const badgeA = a.badge || "";
+      const badgeB = b.badge || "";
+      return badgeA.localeCompare(badgeB);
+    } else if (sortBy === "team") {
+      const teamA = a.team || "none";
+      const teamB = b.team || "none";
+      return teamA.localeCompare(teamB);
+    }
+    return 0; // "recent"
+  });
+
+  // Apply search filter
+  let displayUsers = sortedUsers.filter(u => `${u.firstName || ""} ${u.lastName || ""}`.toLowerCase().includes(searchTerm.toLowerCase()));
+
+  // Apply age bracket filter if active
+  if (sortBy === "age" && ageFilter !== "all") {
+    displayUsers = displayUsers.filter(u => getAgeBracket(calculateAge(u.birthDate, u.age)) === ageFilter);
+  }
+  
+  // Apply badge filter if active
+  if (sortBy === "badge" && badgeFilter !== "all") {
+    displayUsers = displayUsers.filter(u => (u.badge || "") === badgeFilter);
+  }
+  
+  // Apply team filter if active
+  if (sortBy === "team" && teamFilter !== "all") {
+    displayUsers = displayUsers.filter(u => (u.team || "none").toLowerCase() === teamFilter.toLowerCase());
+  }
+
+  const renderUserCard = (user: any) => (
+    <div key={user.id} className="card" style={{ 
+      display: "flex", 
+      justifyContent: "space-between", 
+      alignItems: "center", 
+      padding: "20px", 
+      background: user.isBanned ? "rgba(255,0,0,0.05)" : "var(--bg-card)",
+      border: user.isBanned ? "1px solid rgba(255,0,0,0.3)" : "1px solid rgba(255,255,255,0.1)",
+      borderRadius: "15px",
+      flexWrap: "wrap",
+      gap: "20px"
+    }}>
+      
+      <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+        {/* Avatar with Badge */}
+        <div style={{ position: "relative", width: "60px", height: "60px" }}>
+          {typeof user.avatar === 'string' && user.avatar.startsWith('http') ? (
+            <img 
+              src={user.avatar} 
+              alt={user.firstName} 
+              style={{ width: "100%", height: "100%", borderRadius: "50%", objectFit: "cover", border: `2px solid ${user.team && user.team !== 'none' ? user.team : 'transparent'}` }}
+            />
+          ) : (
+            <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "transparent", color: "var(--neon-yellow)", display: "flex", justifyContent: "center", alignItems: "center", fontWeight: "900", textTransform: "uppercase", fontSize: "2rem", fontFamily: "var(--font-outfit)", border: `2px solid ${user.team && user.team !== 'none' ? user.team : 'transparent'}` }}>
+              {(user.firstName?.[0] || "") + (user.lastName?.[0] || "")}
+            </div>
+          )}
+          
+          {/* Small Badge icon on bottom right */}
+          <div style={{
+            position: "absolute",
+            bottom: "-5px",
+            right: "-5px",
+            background: "var(--bg-dark)",
+            borderRadius: "50%",
+            padding: "2px",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center"
+          }}>
+            <span style={{ 
+              display: "block", 
+              width: "24px", 
+              height: "24px", 
+              borderRadius: "50%", 
+              background: "transparent", 
+              color: "white", 
+              fontSize: "12px", 
+              fontWeight: "bold",
+              lineHeight: "24px",
+              textAlign: "center",
+              border: "none",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              whiteSpace: "nowrap"
+            }} title={user.badge || "User"}>
+              {ROLES.find(r => r.id === user.badge)?.emoji || "🔰"}
+            </span>
+          </div>
+        </div>
+
+        {/* Name */}
+        <div>
+          <h4 style={{ margin: 0, color: user.isBanned ? "#FF4444" : "var(--neon-white)", fontSize: "1.2rem", fontFamily: "var(--font-outfit)" }}>
+            {user.firstName} {user.lastName} {user.isBanned && "(BANNED)"}
+          </h4>
+          <p style={{ margin: "5px 0 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+            {user.email}
+          </p>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+        <button 
+          onClick={() => {
+            setManageUser(user);
+            setEditBadge(user.badge || "first-timer");
+            setEditTeam(user.team || "none");
+            setIsEditBadgeDropdownOpen(false);
+            setIsEditTeamDropdownOpen(false);
+          }}
+          style={{ 
+            padding: "8px 15px", 
+            background: "rgba(0, 100, 255, 0.1)", 
+            border: "1px solid var(--neon-blue)", 
+            color: "var(--neon-blue)", 
+            borderRadius: "20px", 
+            cursor: "pointer", 
+            fontSize: "0.85rem",
+            fontWeight: "bold",
+            transition: "all 0.3s ease"
+          }}
+          onMouseOver={(e) => e.currentTarget.style.background = "rgba(0, 100, 255, 0.3)"}
+          onMouseOut={(e) => e.currentTarget.style.background = "rgba(0, 100, 255, 0.1)"}
+        >
+          Manage User
+        </button>
+        
+        {user.isBanned ? (
+          <button 
+            onClick={() => handleUnban(user.id)}
+            style={{ 
+              padding: "8px 15px", 
+              background: "rgba(255, 255, 255, 0.1)", 
+              border: "1px solid white", 
+              color: "white", 
+              borderRadius: "20px", 
+              cursor: "pointer", 
+              fontSize: "0.85rem",
+              fontWeight: "bold",
+              transition: "all 0.3s ease"
+            }}
+          >
+            Unban User
+          </button>
+        ) : (
+          <button 
+            onClick={() => setBanUser(user)}
+            style={{ 
+              padding: "8px 15px", 
+              background: "rgba(255, 68, 68, 0.1)", 
+              border: "1px solid #FF4444", 
+              color: "#FF4444", 
+              borderRadius: "20px", 
+              cursor: "pointer", 
+              fontSize: "0.85rem",
+              fontWeight: "bold",
+              transition: "all 0.3s ease"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 68, 68, 0.3)"}
+            onMouseOut={(e) => e.currentTarget.style.background = "rgba(255, 68, 68, 0.1)"}
+          >
+            Ban
+          </button>
+        )}
+      </div>
+    </div>
+  );
+
+  if (!isLoggedIn) return null;
+
+  return (
+    <main className="main-container" style={{ padding: "80px 20px", paddingBottom: "120px" }}>
+      {toastMessage && (
+        <div style={{ position: "fixed", top: "20px", left: "50%", transform: "translateX(-50%)", background: "#d50000", color: "white", padding: "10px 20px", borderRadius: "8px", zIndex: 9999, fontWeight: "bold", boxShadow: "0 4px 12px rgba(0,0,0,0.3)" }}>
+          {toastMessage}
+        </div>
+      )}
+      <header style={{ marginBottom: "40px", textAlign: "center" }}>
+        <HeartistLogo className="animated-glow-text" width={45} height={45} />
+        <h1 
+          className="header-title glow-text-yellow" 
+          style={{ fontFamily: "var(--font-outfit)", fontSize: "2.5rem", marginTop: "15px", textTransform: "uppercase" }}
+        >
+          Manage Users
+        </h1>
+        <h2 style={{ color: "var(--text-muted)", fontSize: "1.1rem", marginTop: "10px", fontFamily: "var(--font-outfit)" }}>
+          View, manage, and penalize registered users.
+        </h2>
+      </header>
+
+      <section style={{ maxWidth: "800px", margin: "0 auto", padding: "0 10px" }}>
+        
+        {/* Title and Total Badge on same line */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "15px" }}>
+          <h3 style={{ color: "var(--neon-white)", fontSize: "1.5rem", fontFamily: "var(--font-outfit)", margin: 0 }}>
+            Registered Users
+          </h3>
+          <span style={{ background: "rgba(255,255,255,0.1)", padding: "5px 15px", borderRadius: "20px", fontSize: "0.85rem", color: "white" }}>
+            Total: {displayUsers.length}
+          </span>
+        </div>
+
+        {/* Search on a new line */}
+        <div style={{ marginBottom: "15px" }}>
+          <input 
+            type="text" 
+            placeholder="Search user by name..." 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            style={{
+              width: "100%",
+              padding: "10px 15px",
+              borderRadius: "20px",
+              border: "1px solid rgba(255,255,255,0.2)",
+              background: "rgba(0,0,0,0.5)",
+              color: "white",
+              outline: "none",
+              fontFamily: "var(--font-outfit)"
+            }}
+          />
+        </div>
+            
+        {/* Filters on a new line */}
+        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap", marginBottom: "30px" }}>
+          <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>Filter / Sort by:</span>
+          
+          {/* Custom Sort Dropdown */}
+          <div style={{ position: "relative" }}>
+            <button 
+              onClick={() => setIsSortDropdownOpen(!isSortDropdownOpen)}
+              onBlur={() => setTimeout(() => setIsSortDropdownOpen(false), 200)}
+              style={{
+                padding: "8px 15px",
+                borderRadius: "20px",
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(0,0,0,0.5)",
+                color: "white",
+                outline: "none",
+                fontFamily: "var(--font-outfit)",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                minWidth: "150px",
+                justifyContent: "space-between"
+              }}
+            >
+              {sortBy === "recent" ? "Recently Added" : sortBy === "name" ? "Name (A-Z)" : sortBy === "age" ? "Age" : sortBy === "badge" ? "Badge" : "Team"}
+              <span style={{ fontSize: "0.7rem", transition: "transform 0.3s", transform: isSortDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+            </button>
+            
+            {isSortDropdownOpen && (
+              <div style={{
+                position: "absolute",
+                top: "110%",
+                left: 0,
+                width: "100%",
+                background: "var(--bg-card)",
+                border: "1px solid var(--neon-blue)",
+                borderRadius: "10px",
+                overflow: "hidden",
+                zIndex: 50,
+                boxShadow: "0 5px 15px rgba(0,0,0,0.5)"
+              }}>
+                {[
+                  {id: "recent", label: "Recently Added"}, 
+                  {id: "name", label: "Name (A-Z)"}, 
+                  {id: "age", label: "Age"},
+                  {id: "badge", label: "Badge"},
+                  {id: "team", label: "Team"}
+                ].map(opt => (
+                  <div 
+                    key={opt.id}
+                    onClick={() => { setSortBy(opt.id); setIsSortDropdownOpen(false); }}
+                    style={{
+                      padding: "10px 15px",
+                      cursor: "pointer",
+                      color: sortBy === opt.id ? "var(--neon-yellow)" : "white",
+                      background: sortBy === opt.id ? "rgba(255,255,255,0.05)" : "transparent",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.9rem",
+                      borderBottom: "1px solid rgba(255,255,255,0.05)"
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                    onMouseOut={(e) => e.currentTarget.style.background = sortBy === opt.id ? "rgba(255,255,255,0.05)" : "transparent"}
+                  >
+                    {opt.label}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Custom Age Filter Dropdown (shows only if sortBy === 'age') */}
+          {sortBy === "age" && (
+            <div style={{ position: "relative" }}>
+              <button 
+                onClick={() => setIsAgeDropdownOpen(!isAgeDropdownOpen)}
+                onBlur={() => setTimeout(() => setIsAgeDropdownOpen(false), 200)}
+                style={{
+                  padding: "8px 15px",
+                  borderRadius: "20px",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(0,0,0,0.5)",
+                  color: "white",
+                  outline: "none",
+                  fontFamily: "var(--font-outfit)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  minWidth: "120px",
+                  justifyContent: "space-between"
+                }}
+              >
+                {ageFilter === "all" ? "All Ages" : ageFilter}
+                <span style={{ fontSize: "0.7rem", transition: "transform 0.3s", transform: isAgeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+              </button>
+              
+              {isAgeDropdownOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "110%",
+                  left: 0,
+                  width: "100%",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--neon-blue)",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  zIndex: 50,
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  boxShadow: "0 5px 15px rgba(0,0,0,0.5)"
+                }}>
+                  {["all", "0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60+"].map(opt => (
+                    <div 
+                      key={opt}
+                      onClick={() => { setAgeFilter(opt); setIsAgeDropdownOpen(false); }}
+                      style={{
+                        padding: "10px 15px",
+                        cursor: "pointer",
+                        color: ageFilter === opt ? "var(--neon-yellow)" : "white",
+                        background: ageFilter === opt ? "rgba(255,255,255,0.05)" : "transparent",
+                        fontFamily: "var(--font-outfit)",
+                        fontSize: "0.9rem",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)"
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                      onMouseOut={(e) => e.currentTarget.style.background = ageFilter === opt ? "rgba(255,255,255,0.05)" : "transparent"}
+                    >
+                      {opt === "all" ? "All Ages" : opt}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Custom Badge Filter Dropdown (shows only if sortBy === 'badge') */}
+          {sortBy === "badge" && (
+            <div style={{ position: "relative" }}>
+              <button 
+                onClick={() => setIsBadgeDropdownOpen(!isBadgeDropdownOpen)}
+                onBlur={() => setTimeout(() => setIsBadgeDropdownOpen(false), 200)}
+                style={{
+                  padding: "8px 15px",
+                  borderRadius: "20px",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(0,0,0,0.5)",
+                  color: "white",
+                  outline: "none",
+                  fontFamily: "var(--font-outfit)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  minWidth: "150px",
+                  justifyContent: "space-between"
+                }}
+              >
+                {badgeFilter === "all" ? "All Badges" : ROLES.find(r => r.id === badgeFilter)?.label || badgeFilter}
+                <span style={{ fontSize: "0.7rem", transition: "transform 0.3s", transform: isBadgeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+              </button>
+              
+              {isBadgeDropdownOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "110%",
+                  left: 0,
+                  width: "100%",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--neon-blue)",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  zIndex: 50,
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  boxShadow: "0 5px 15px rgba(0,0,0,0.5)",
+                  minWidth: "150px"
+                }}>
+                  {[{id: "all", label: "All Badges"}, ...ROLES].map(opt => (
+                    <div 
+                      key={opt.id}
+                      onClick={() => { setBadgeFilter(opt.id); setIsBadgeDropdownOpen(false); }}
+                      style={{
+                        padding: "10px 15px",
+                        cursor: "pointer",
+                        color: badgeFilter === opt.id ? "var(--neon-yellow)" : "white",
+                        background: badgeFilter === opt.id ? "rgba(255,255,255,0.05)" : "transparent",
+                        fontFamily: "var(--font-outfit)",
+                        fontSize: "0.9rem",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)"
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                      onMouseOut={(e) => e.currentTarget.style.background = badgeFilter === opt.id ? "rgba(255,255,255,0.05)" : "transparent"}
+                    >
+                      {opt.label}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Custom Team Filter Dropdown (shows only if sortBy === 'team') */}
+          {sortBy === "team" && (
+            <div style={{ position: "relative" }}>
+              <button 
+                onClick={() => setIsTeamDropdownOpen(!isTeamDropdownOpen)}
+                onBlur={() => setTimeout(() => setIsTeamDropdownOpen(false), 200)}
+                style={{
+                  padding: "8px 15px",
+                  borderRadius: "20px",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(0,0,0,0.5)",
+                  color: "white",
+                  outline: "none",
+                  fontFamily: "var(--font-outfit)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  minWidth: "120px",
+                  justifyContent: "space-between",
+                  textTransform: "capitalize"
+                }}
+              >
+                {teamFilter === "all" ? "All Teams" : teamFilter}
+                <span style={{ fontSize: "0.7rem", transition: "transform 0.3s", transform: isTeamDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
+              </button>
+              
+              {isTeamDropdownOpen && (
+                <div style={{
+                  position: "absolute",
+                  top: "110%",
+                  left: 0,
+                  width: "100%",
+                  background: "var(--bg-card)",
+                  border: "1px solid var(--neon-blue)",
+                  borderRadius: "10px",
+                  overflow: "hidden",
+                  zIndex: 50,
+                  maxHeight: "200px",
+                  overflowY: "auto",
+                  boxShadow: "0 5px 15px rgba(0,0,0,0.5)"
+                }}>
+                  {["all", ...TEAMS].map(opt => (
+                    <div 
+                      key={opt}
+                      onClick={() => { setTeamFilter(opt); setIsTeamDropdownOpen(false); }}
+                      style={{
+                        padding: "10px 15px",
+                        cursor: "pointer",
+                        color: teamFilter === opt ? "var(--neon-yellow)" : "white",
+                        background: teamFilter === opt ? "rgba(255,255,255,0.05)" : "transparent",
+                        fontFamily: "var(--font-outfit)",
+                        fontSize: "0.9rem",
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
+                        textTransform: "capitalize"
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                      onMouseOut={(e) => e.currentTarget.style.background = teamFilter === opt ? "rgba(255,255,255,0.05)" : "transparent"}
+                    >
+                      {opt === "all" ? "All Teams" : opt}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* LIST RENDERING */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+          {displayUsers.length === 0 && (
+            <div style={{ textAlign: "center", padding: "40px", color: "var(--text-muted)", fontStyle: "italic", background: "rgba(255,255,255,0.02)", borderRadius: "10px" }}>
+              No users found.
+            </div>
+          )}
+
+          {(() => {
+            if (sortBy === "name") {
+              const grouped: { [key: string]: any[] } = {};
+              displayUsers.forEach(u => {
+                const firstChar = (u.firstName || u.lastName || "?").charAt(0).toUpperCase();
+                const letter = /[A-Z]/.test(firstChar) ? firstChar : "#";
+                if (!grouped[letter]) grouped[letter] = [];
+                grouped[letter].push(u);
+              });
+              
+              return Object.keys(grouped).sort().map(groupKey => (
+                <div key={groupKey} style={{ marginBottom: "20px" }}>
+                  <h2 style={{ 
+                    color: "var(--neon-yellow)", 
+                    fontFamily: "var(--font-outfit)", 
+                    borderBottom: "1px solid rgba(255,255,255,0.1)", 
+                    paddingBottom: "5px",
+                    marginBottom: "15px",
+                    marginTop: 0
+                  }}>
+                    {groupKey}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                    {grouped[groupKey].map(user => renderUserCard(user))}
+                  </div>
+                </div>
+              ));
+            } else if (sortBy === "age") {
+              const grouped: { [key: string]: any[] } = {};
+              displayUsers.forEach(u => {
+                const exactAge = calculateAge(u.birthDate, u.age);
+                let groupKey = getAgeBracket(exactAge);
+                
+                if (ageFilter !== "all" && ageFilter !== "60+" && exactAge !== -1) {
+                  groupKey = exactAge.toString();
+                } else if (ageFilter === "60+") {
+                  groupKey = "60+";
+                }
+                
+                if (!grouped[groupKey]) grouped[groupKey] = [];
+                grouped[groupKey].push(u);
+              });
+              
+              let keys = Object.keys(grouped);
+              if (ageFilter === "all") {
+                const ageOrder = ["0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60+", "Unknown"];
+                keys = ageOrder.filter(k => grouped[k]);
+              } else {
+                 keys.sort((a,b) => parseInt(a) - parseInt(b));
+              }
+
+              return keys.map(groupKey => (
+                <div key={groupKey} style={{ marginBottom: "20px" }}>
+                  <h2 style={{ 
+                    color: "var(--neon-yellow)", 
+                    fontFamily: "var(--font-outfit)", 
+                    borderBottom: "1px solid rgba(255,255,255,0.1)", 
+                    paddingBottom: "5px",
+                    marginBottom: "15px",
+                    marginTop: 0
+                  }}>
+                    {groupKey === "Unknown" ? "Unknown Age" : `Age ${groupKey}`}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                    {grouped[groupKey].map(user => renderUserCard(user))}
+                  </div>
+                </div>
+              ));
+            } else if (sortBy === "badge") {
+              const grouped: { [key: string]: any[] } = {};
+              displayUsers.forEach(u => {
+                const badgeId = u.badge || "none";
+                if (!grouped[badgeId]) grouped[badgeId] = [];
+                grouped[badgeId].push(u);
+              });
+              
+              return Object.keys(grouped).map(groupKey => {
+                const badgeLabel = ROLES.find(r => r.id === groupKey)?.label || "No Badge";
+                return (
+                  <div key={groupKey} style={{ marginBottom: "20px" }}>
+                    <h2 style={{ 
+                      color: "var(--neon-yellow)", 
+                      fontFamily: "var(--font-outfit)", 
+                      borderBottom: "1px solid rgba(255,255,255,0.1)", 
+                      paddingBottom: "5px",
+                      marginBottom: "15px",
+                      marginTop: 0
+                    }}>
+                      {badgeLabel}
+                    </h2>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                      {grouped[groupKey].map(user => renderUserCard(user))}
+                    </div>
+                  </div>
+                );
+              });
+            } else if (sortBy === "team") {
+              const grouped: { [key: string]: any[] } = {};
+              displayUsers.forEach(u => {
+                const teamId = (u.team || "none").toLowerCase();
+                if (!grouped[teamId]) grouped[teamId] = [];
+                grouped[teamId].push(u);
+              });
+              
+              return Object.keys(grouped).sort().map(groupKey => (
+                <div key={groupKey} style={{ marginBottom: "20px" }}>
+                  <h2 style={{ 
+                    color: "var(--neon-yellow)", 
+                    fontFamily: "var(--font-outfit)", 
+                    borderBottom: "1px solid rgba(255,255,255,0.1)", 
+                    paddingBottom: "5px",
+                    marginBottom: "15px",
+                    marginTop: 0,
+                    textTransform: "capitalize"
+                  }}>
+                    {groupKey === "none" ? "No Team" : `${groupKey} Team`}
+                  </h2>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+                    {grouped[groupKey].map(user => renderUserCard(user))}
+                  </div>
+                </div>
+              ));
+            } else {
+              return displayUsers.map(user => renderUserCard(user));
+            }
+          })()}
+        </div>
+
+      </section>
+
+      {/* MANAGE USER MODAL */}
+      {manageUser && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, padding: "20px" }}>
+          <div className="card" style={{ maxWidth: "400px", width: "100%", background: "var(--bg-card)", border: "1px solid var(--neon-blue)", position: "relative" }}>
+            <button 
+              onClick={() => setManageUser(null)}
+              style={{ position: "absolute", top: "15px", right: "20px", background: "transparent", border: "none", color: "white", fontSize: "1.5rem", cursor: "pointer" }}
+            >&times;</button>
+            
+            <h2 style={{ color: "var(--neon-white)", fontFamily: "var(--font-outfit)", marginBottom: "20px", marginTop: 0 }}>User Details</h2>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
+                <span style={{ color: "var(--text-muted)" }}>Full Name:</span>
+                <span style={{ fontWeight: "bold", color: "white" }}>{manageUser.firstName} {manageUser.lastName}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px", position: "relative" }}>
+                <span style={{ color: "var(--text-muted)" }}>Badge:</span>
+                <div style={{ position: "relative" }}>
+                  <div 
+                    onClick={() => { setIsEditBadgeDropdownOpen(!isEditBadgeDropdownOpen); setIsEditTeamDropdownOpen(false); }}
+                    style={{ background: "rgba(0,0,0,0.5)", border: "1px solid var(--neon-yellow)", color: "var(--neon-yellow)", padding: "5px 10px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}
+                  >
+                    {ROLES.find(r => r.id === editBadge)?.label || "Select Badge"} <span>▼</span>
+                  </div>
+                  {isEditBadgeDropdownOpen && (
+                    <div style={{ position: "absolute", top: "100%", right: 0, width: "200px", background: "rgba(0,0,0,0.9)", border: "1px solid var(--neon-yellow)", borderRadius: "8px", marginTop: "5px", zIndex: 10, maxHeight: "150px", overflowY: "auto" }}>
+                      {ROLES.map(r => (
+                        <div 
+                          key={r.id} 
+                          onClick={() => { setEditBadge(r.id); setIsEditBadgeDropdownOpen(false); }}
+                          style={{ padding: "10px", color: "white", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.1)" }}
+                          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,234,0,0.1)"}
+                          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+                        >
+                          {r.label}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px", position: "relative" }}>
+                <span style={{ color: "var(--text-muted)" }}>Team:</span>
+                <div style={{ position: "relative" }}>
+                  <div 
+                    onClick={() => { setIsEditTeamDropdownOpen(!isEditTeamDropdownOpen); setIsEditBadgeDropdownOpen(false); }}
+                    style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: editTeam === "none" ? "var(--text-muted)" : editTeam, padding: "5px 10px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px", textTransform: "capitalize", fontWeight: "bold" }}
+                  >
+                    {editTeam === "none" ? "Remove Team" : editTeam} <span>▼</span>
+                  </div>
+                  {isEditTeamDropdownOpen && (
+                    <div style={{ position: "absolute", top: "100%", right: 0, width: "150px", background: "rgba(0,0,0,0.9)", border: "1px solid rgba(255,255,255,0.2)", borderRadius: "8px", marginTop: "5px", zIndex: 10, maxHeight: "150px", overflowY: "auto" }}>
+                      {TEAMS.map(t => (
+                        <div 
+                          key={t} 
+                          onClick={() => { setEditTeam(t); setIsEditTeamDropdownOpen(false); }}
+                          style={{ padding: "10px", color: t === "none" ? "var(--text-muted)" : t, cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.1)", textTransform: "capitalize", fontWeight: "bold" }}
+                          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
+                          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+                        >
+                          {t === "none" ? "Remove Team" : t}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
+                <span style={{ color: "var(--text-muted)" }}>Email:</span>
+                <span style={{ color: "white" }}>{manageUser.email || "N/A"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
+                <span style={{ color: "var(--text-muted)" }}>Phone Number:</span>
+                <span style={{ color: "white" }}>{manageUser.contact || "N/A"}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span style={{ color: "var(--text-muted)" }}>Age:</span>
+                <span style={{ color: "white" }}>{calculateAge(manageUser.birthDate, manageUser.age) !== -1 ? calculateAge(manageUser.birthDate, manageUser.age) : "N/A"}</span>
+              </div>
+            </div>
+            
+            <div style={{ marginTop: "30px", textAlign: "right" }}>
+              <button 
+                onClick={handleSaveUserUpdates}
+                disabled={isSavingUser}
+                style={{ padding: "10px 20px", background: "var(--neon-yellow)", border: "none", color: "black", borderRadius: "8px", fontWeight: "bold", cursor: isSavingUser ? "wait" : "pointer" }}
+              >
+                {isSavingUser ? "Saving..." : "Save Updates"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BAN USER MODAL */}
+      {banUser && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", background: "rgba(0,0,0,0.8)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000, padding: "20px" }}>
+          <div className="card" style={{ maxWidth: "400px", width: "100%", background: "var(--bg-card)", border: "1px solid #FF4444", position: "relative" }}>
+            <button 
+              onClick={() => { setBanUser(null); setBanReason(""); }}
+              style={{ position: "absolute", top: "15px", right: "20px", background: "transparent", border: "none", color: "white", fontSize: "1.5rem", cursor: "pointer" }}
+            >&times;</button>
+            
+            <h2 style={{ color: "#FF4444", fontFamily: "var(--font-outfit)", marginBottom: "10px", marginTop: 0 }}>Ban User</h2>
+            <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "20px" }}>
+              Are you sure you want to ban <strong>{banUser.firstName} {banUser.lastName}</strong>?
+            </p>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "var(--neon-white)", fontSize: "0.9rem" }}>Ban Reason</label>
+              <input 
+                type="text" 
+                value={banReason}
+                onChange={(e) => setBanReason(e.target.value)}
+                placeholder="e.g. Violation of Community Guidelines"
+                style={{ width: "100%", padding: "10px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", borderRadius: "8px", outline: "none" }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "30px" }}>
+              <label style={{ display: "block", marginBottom: "10px", color: "var(--neon-white)", fontSize: "0.9rem" }}>Ban Duration</label>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "10px" }}>
+                {[
+                  { value: "1", label: "1 Day" },
+                  { value: "3", label: "3 Days" },
+                  { value: "7", label: "7 Days" },
+                  { value: "30", label: "30 Days" },
+                  { value: "36500", label: "Permanent" }
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setBanDays(opt.value)}
+                    style={{
+                      flex: "1 1 calc(33.333% - 10px)",
+                      padding: "10px 5px",
+                      background: banDays === opt.value ? "rgba(255, 68, 68, 0.2)" : "rgba(0,0,0,0.5)",
+                      border: banDays === opt.value ? "1px solid #FF4444" : "1px solid rgba(255,255,255,0.2)",
+                      color: banDays === opt.value ? "#FF4444" : "var(--text-muted)",
+                      borderRadius: "8px",
+                      cursor: "pointer",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.85rem",
+                      fontWeight: banDays === opt.value ? "bold" : "normal",
+                      transition: "all 0.2s ease"
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <button 
+                onClick={() => { setBanUser(null); setBanReason(""); }}
+                style={{ padding: "10px 20px", background: "transparent", border: "1px solid rgba(255,255,255,0.2)", color: "white", borderRadius: "8px", cursor: "pointer" }}
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleBanSubmit}
+                style={{ padding: "10px 20px", background: "#FF4444", border: "none", color: "white", borderRadius: "8px", fontWeight: "bold", cursor: "pointer" }}
+              >
+                Confirm Ban
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div style={{ textAlign: "center", marginTop: "40px", paddingBottom: "100px" }}>
+        <Link href="/admin" className="nav-item" style={{ padding: "10px 20px", border: "1px solid var(--neon-yellow)", borderRadius: "8px", textDecoration: "none", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
+          Back to Admin Dashboard
+        </Link>
+      </div>
+
+      <AdminBottomNav />
+    </main>
+  );
+}

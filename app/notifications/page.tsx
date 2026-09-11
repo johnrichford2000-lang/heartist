@@ -1,0 +1,1041 @@
+"use client";
+
+import React, { useEffect, useState } from "react";
+import HeartistLogo from "@/components/HeartistLogo";
+import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+
+export default function NotificationsPage() {
+  const router = useRouter();
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
+
+  useEffect(() => {
+    const activeUserStr = localStorage.getItem("activeUser");
+    if (!activeUserStr) {
+      router.push("/");
+    } else {
+      const currentUserObj = JSON.parse(activeUserStr);
+      const currentUser = currentUserObj.firstName;
+      const currentUserFullName = `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
+
+      const accs = JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
+      setAccounts(accs);
+
+      const fetchInbox = async () => {
+         try {
+             const { data: directData } = await supabase.from('notifications').select('*').eq('recipient_id', currentUserObj.id || currentUser).order('created_at', { ascending: false });
+             const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
+             
+             const data = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+             
+             if (data) {
+               const adminNotifs: any[] = [];
+               const regularNotifs: any[] = [];
+
+               data.forEach((msg: any) => {
+                 const t = msg.type ? msg.type.toUpperCase() : "MESSAGE";
+                 const isGetInvolved =
+                   t.includes("GET_INVOLVED") ||
+                   msg.sender_name === "Heartist Team" ||
+                   (typeof msg.message === "string" && (
+                     msg.message.includes("reach out to get involved") ||
+                     msg.message.includes("part of our journey") ||
+                     msg.message.includes("heart to serve") ||
+                     (msg.message.includes("Heartist") && msg.message.includes("next steps"))
+                   ));
+
+                 if (isGetInvolved) {
+                   adminNotifs.push({
+                     id: `get_involved_${msg.id}`,
+                     supabase_id: msg.id,
+                     isInboxItem: true,
+                     type: "GET_INVOLVED",
+                     targetUrl: `/get-involved?scrollTo=my-entries&subId=${msg.post_id || ""}`,
+                     filterCategory: "Get Involved",
+                     timestamp: new Date(msg.created_at).getTime(),
+                     read: msg.is_read,
+                     content: msg.message,
+                     senderName: "Heartist Team"
+                   });
+                 } else if (t.includes("WARN") || t.includes("PENALTY") || t.includes("MESSAGE") || t.includes("APPEAL") || t.includes("ALERT") || t.includes("MODERATION") || t.includes("UNBLOCKED")) {
+                   let filterCategory = "Others";
+                   if (t.includes("WARN") || t.includes("MESSAGE") || t.includes("MODERATION") || t.includes("UNBLOCKED")) filterCategory = "Warnings";
+                   else if (t.includes("PENALTY")) filterCategory = "Penalties";
+                   else if (t.includes("APPEAL")) filterCategory = "Reports";
+                   else if (t.includes("ALERT")) filterCategory = "Deleted";
+                   
+                   adminNotifs.push({
+                     id: `inbox_${msg.id}`,
+                     supabase_id: msg.id,
+                     isInboxItem: true,
+                     type: msg.type,
+                     filterCategory,
+                     timestamp: new Date(msg.created_at).getTime(),
+                     read: msg.is_read,
+                     content: msg.message,
+                   });
+                 } else {
+                   try {
+                     const parsedNotif = JSON.parse(msg.message);
+                     parsedNotif.supabase_id = msg.id;
+                     parsedNotif.read = msg.is_read;
+                     regularNotifs.push(parsedNotif);
+                   } catch(e) {}
+                 }
+               });
+               
+               const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
+               const myInbox = [
+                 ...(inboxData[currentUser] || []),
+                 ...(inboxData[currentUserFullName] || []),
+               ].filter((v, i, a) => a.findIndex((t: any) => t.id === v.id) === i);
+               
+               const legacyInbox = myInbox.map((msg: any) => {
+                 let filterCategory = "Others";
+                 const t = msg.type || "MESSAGE";
+                 if (t.includes("WARN")) filterCategory = "Warnings";
+                 else if (t.includes("PENALTY")) filterCategory = "Penalties";
+                 else if (t.includes("REPORT")) filterCategory = "Reports";
+                 else if (t.includes("DELETE")) filterCategory = "Deleted";
+
+                 let contentStr = "";
+                 if (typeof msg.content === "object")
+                   contentStr = msg.content.action || "Update on your post.";
+                 else contentStr = msg.content;
+
+                 return {
+                   id: `inbox_${msg.id}`,
+                   isInboxItem: true,
+                   type: msg.type,
+                   filterCategory,
+                   timestamp: msg.id,
+                   read: msg.read,
+                   content: contentStr,
+                 };
+               });
+
+               const finalAdminNotifs = [...adminNotifs, ...legacyInbox].sort((a, b) => b.timestamp - a.timestamp);
+
+               let modified = false;
+               regularNotifs.forEach((n: any) => {
+                 if (
+                   (n.type === "badge_update" ||
+                     n.type === "team_add" ||
+                     n.type === "team_remove" ||
+                     n.type === "prayer_deleted" ||
+                     n.type === "post_deleted" || n.type === "comment_deleted") &&
+                   (!n.users || n.users[0] === "Admin" || !n.users[0])
+                 ) {
+                   const adminAcc = accs.find((a: any) => a.badge === "admin" && a.firstName);
+                   const adminName = adminAcc ? adminAcc.firstName : "AdminRichford";
+                   n.users = [adminName, n.postAuthor];
+                   modified = true;
+                 }
+               });
+
+               const myNotifs = regularNotifs.filter(
+                 (n: any) =>
+                   n.postAuthor === currentUser ||
+                   n.postAuthor === currentUserFullName ||
+                   n.postAuthor === currentUserObj?.id ||
+                   n.userId === currentUserFullName ||
+                   n.userId === currentUser ||
+                   n.userId === currentUserObj?.id ||
+                   n.userId === "everyone"
+               );
+
+               myNotifs.sort((a: any, b: any) => a.timestamp - b.timestamp);
+               const allGroups: any[][] = [];
+               const keyMap = new Map<string, { mainGroup: any[]; standaloneGroups: any[][]; seenUsers: Set<string> }>();
+
+               myNotifs.forEach((n: any) => {
+                 const key = (n.postContent || "unknown_post") + "_" + (n.type || "reaction");
+                 if (!keyMap.has(key)) {
+                   keyMap.set(key, { mainGroup: [], standaloneGroups: [], seenUsers: new Set<string>() });
+                 }
+
+                 const state = keyMap.get(key)!;
+                 const user = n.fromUser || n.sourceName;
+
+                 if (user && !state.seenUsers.has(user)) {
+                   state.seenUsers.add(user);
+                   state.mainGroup.push(n);
+                 } else {
+                   state.standaloneGroups.push([n]);
+                 }
+               });
+
+               keyMap.forEach((state) => {
+                 if (state.mainGroup.length > 0) allGroups.push(state.mainGroup);
+                 state.standaloneGroups.forEach((group) => allGroups.push(group));
+               });
+
+               const mappedNotifications = allGroups.map((group) => {
+                 const recentNotif = group[group.length - 1];
+                 const uniqueUsers = Array.from(new Set(group.map((n: any) => n.fromUser || n.sourceName))).filter(Boolean);
+
+                 let category = "Interactions";
+                 if (recentNotif.type.includes("mention")) category = "Mentions";
+                 else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
+                 else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
+                 
+                 return {
+                   id: recentNotif.supabase_id || recentNotif.id,
+                   supabase_id: recentNotif.supabase_id,
+                   category: category,
+                   type: recentNotif.type || "reaction",
+                   mentionType: recentNotif.mentionType,
+                   postContent: recentNotif.postContent,
+                   postId: recentNotif.postId,
+                   timestamp: recentNotif.timestamp,
+                   read: group.every((n: any) => n.read),
+                   users: uniqueUsers,
+                 };
+               });
+
+               const combinedNotifications = [...mappedNotifications, ...finalAdminNotifs];
+               setNotifications(combinedNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
+            }
+         } catch (e) {
+             console.error("Failed to load inbox", e);
+         }
+      };
+
+      fetchInbox();
+    }
+  }, []);
+  const formatTimeAgo = (timestampMs: number) => {
+  if (!timestampMs) return "";
+  const seconds = Math.floor((Date.now() - timestampMs) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (seconds < 60) return "just now";
+  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+  if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+  if (days < 28) {
+    const weeks = Math.floor(days / 7);
+    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+  }
+  if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+  return `${years} year${years !== 1 ? 's' : ''} ago`;
+};
+
+  const getRoleIcon = (role: string) => {
+    switch (role?.toLowerCase()) {
+      case "first-timer":
+      case "first timer":
+        return "🐣";
+      case "camp-veteran":
+      case "camp veteran":
+        return "🎖️";
+      case "supporter":
+        return "💖";
+      case "pastor":
+        return "📖";
+      case "camp-coordinator":
+      case "camp coordinator":
+        return "🎯";
+      case "facilitator":
+        return "⭐";
+      case "media-team":
+      case "media team":
+        return "📸";
+      case "music-team":
+      case "music team":
+        return "🎵";
+      case "dance-ministry":
+      case "dance ministry":
+        return "💃";
+      case "anonymous":
+        return "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
+      case "admin":
+        return "👑";
+      default:
+        return "";
+    }
+  };
+
+  const getUserDetails = (username: string) => {
+    const acc = accounts.find(
+      (a) =>
+        a.firstName === username ||
+        `${a.firstName} ${a.lastName}`.trim() === username,
+    );
+    if (acc) {
+      return {
+        fullName: `${acc.firstName} ${acc.lastName}`,
+        avatar: acc.avatar || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg",
+        team: acc.team || "none",
+        badge: acc.badge || "Heartist",
+      };
+    }
+    return {
+      fullName: username,
+      avatar: "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg",
+      team: "none",
+      badge: "Heartist",
+    };
+  };
+
+  return (
+    <main
+      className="app-container"
+      style={{
+        paddingBottom: "120px",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header */}
+      <header
+        className="top-header"
+        style={{ marginBottom: "20px", position: "relative" }}
+      >
+        <HeartistLogo className="animated-glow-text" width={30} height={30} />
+        <h1
+          className="header-title glow-text-white"
+          style={{
+            fontFamily: "var(--font-outfit)",
+            fontSize: "2rem",
+            marginTop: "10px",
+          }}
+        >
+          NOTIFICATIONS
+        </h1>
+        <p className="logo-sub">Your recent alerts</p>
+      </header>
+
+      {/* Action Buttons */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "row",
+          gap: "10px",
+          marginBottom: "20px",
+        }}
+      >
+        <button
+          onClick={() => {
+            const activeUserStr = localStorage.getItem("activeUser");
+            if (!activeUserStr) return;
+            const currentUserObj = JSON.parse(activeUserStr);
+            const currentUser = currentUserObj.firstName;
+            const currentUserFullName =
+              `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
+
+            const allNotifs = JSON.parse(
+              localStorage.getItem("communityNotifications") || "[]",
+            );
+            const remainingNotifs = allNotifs.filter((n: any) => {
+              const isTargetUser =
+                n.postAuthor === currentUser ||
+                n.postAuthor === currentUserFullName ||
+                n.userId === currentUserFullName ||
+                n.userId === currentUser;
+              return !isTargetUser;
+            });
+            localStorage.setItem(
+              "communityNotifications",
+              JSON.stringify(remainingNotifs),
+            );
+            window.dispatchEvent(new Event("storage"));
+            const displayedSupaIds = notifications.filter((n: any) => n.supabase_id).map((n: any) => n.supabase_id);
+            if (displayedSupaIds.length > 0) {
+              const deleteSupa = async () => {
+                try { await supabase.from('notifications').delete().in('id', displayedSupaIds); } catch(e){}
+              };
+              deleteSupa();
+            }
+            setNotifications([]);
+          }}
+          style={{
+            flex: 1,
+            padding: "10px",
+            background: "rgba(255, 68, 68, 0.2)",
+            border: "1px solid #FF4444",
+            borderRadius: "8px",
+            color: "var(--neon-white)",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Delete All
+        </button>
+        <button
+          onClick={() => {
+            const activeUserStr = localStorage.getItem("activeUser");
+            if (!activeUserStr) return;
+            const currentUserObj = JSON.parse(activeUserStr);
+            const currentUser = currentUserObj.firstName;
+            const currentUserFullName =
+              `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
+
+            const allNotifs = JSON.parse(
+              localStorage.getItem("communityNotifications") || "[]",
+            );
+            const updatedNotifs = allNotifs.map((n: any) => {
+              const isTargetUser =
+                n.postAuthor === currentUser ||
+                n.postAuthor === currentUserFullName ||
+                n.userId === currentUserFullName ||
+                n.userId === currentUser;
+              if (isTargetUser) {
+                return { ...n, read: true };
+              }
+              return n;
+            });
+            localStorage.setItem(
+              "communityNotifications",
+              JSON.stringify(updatedNotifs),
+            );
+            window.dispatchEvent(new Event("storage"));
+            const displayedSupaIds2 = notifications.filter((n: any) => n.supabase_id && !n.read).map((n: any) => n.supabase_id);
+            if (displayedSupaIds2.length > 0) {
+              const updateSupa = async () => {
+                try { await supabase.from('notifications').update({ is_read: true }).in('id', displayedSupaIds2); } catch(e){}
+              };
+              updateSupa();
+            }
+            setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
+          }}
+          style={{
+            flex: 1,
+            padding: "10px",
+            background: "rgba(255, 255, 255, 0.1)",
+            border: "1px solid var(--neon-white)",
+            borderRadius: "8px",
+            color: "var(--neon-white)",
+            cursor: "pointer",
+            fontSize: "0.9rem",
+          }}
+        >
+          Mark All as Read
+        </button>
+      </div>
+
+      <section>
+        <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+          {notifications.length === 0 ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "40px",
+                color: "var(--text-muted)",
+              }}
+            >
+              No notifications yet.
+            </div>
+          ) : (
+            notifications.map((notif) => {
+              if (notif.isInboxItem) {
+                return (
+                  <div
+                    key={notif.id}
+                    onClick={async () => {
+                      if (!notif.read) {
+                        if (notif.supabase_id) {
+                          const { markNotificationRead } = await import('@/lib/notificationsSync');
+                          await markNotificationRead(notif.supabase_id);
+                        }
+                        const allNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
+                        const updated = allNotifs.map((n: any) => n.id === notif.id ? { ...n, read: true } : n);
+                        localStorage.setItem("communityNotifications", JSON.stringify(updated));
+                        window.dispatchEvent(new Event("storage"));
+                      }
+                      if (notif.type === "GET_INVOLVED" || notif.targetUrl) {
+                        router.push(notif.targetUrl || "/get-involved?scrollTo=my-entries");
+                        return;
+                      }
+                      router.push("/fusion/inbox?filter=" + notif.filterCategory);
+                    }}
+                    className="card"
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "flex-start",
+                      padding: "15px",
+                      borderLeft: notif.type === "GET_INVOLVED"
+                        ? "4px solid #EAB308"
+                        : (notif.filterCategory === "Deleted" || notif.type?.includes("DELETE") || notif.type === "WARNING")
+                        ? "4px solid #FF4444"
+                        : "4px solid #FF3366",
+                      animation: "fadeIn 0.3s ease",
+                      gap: "6px",
+                      cursor: "pointer",
+                      transition:
+                        "transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, opacity 0.3s ease",
+                      position: "relative",
+                      background: notif.type === "GET_INVOLVED"
+                        ? (notif.read ? "rgba(234, 179, 8, 0.05)" : "rgba(234, 179, 8, 0.16)")
+                        : notif.read
+                        ? "rgba(255, 51, 102, 0.03)"
+                        : "rgba(255, 51, 102, 0.15)",
+                      opacity: notif.read ? 0.6 : 1,
+                    }}
+                    onMouseOver={(e) =>
+                      (e.currentTarget.style.transform = "scale(1.02)")
+                    }
+                    onMouseOut={(e) =>
+                      (e.currentTarget.style.transform = "scale(1)")
+                    }
+                  >
+                    {!notif.read && (
+                      <div
+                        style={{
+                          position: "absolute",
+                          top: "15px",
+                          right: "15px",
+                          width: "10px",
+                          height: "10px",
+                          background: notif.type === "GET_INVOLVED" ? "#EAB308" : "#FF3366",
+                          borderRadius: "50%",
+                        }}
+                      ></div>
+                    )}
+                    <div
+                      style={{
+                        display: "flex",
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: "12px",
+                        width: "100%",
+                      }}
+                    >
+                      <div
+                        style={{
+                          minWidth: "40px",
+                          minHeight: "40px",
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "50%",
+                          background: notif.type === "GET_INVOLVED" ? "rgba(234, 179, 8, 0.2)" : "rgba(255,51,102,0.2)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "1.5rem",
+                        }}
+                      >
+                        <span style={{ marginTop: "0px", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          {notif.type === "GET_INVOLVED" ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EAB308" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                              <circle cx="9" cy="7" r="4"></circle>
+                              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+                              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                            </svg>
+                          ) : notif.type?.toUpperCase() === "PENALTY" ? "🚫" 
+                          : notif.type?.toUpperCase() === "PENALTY LIFTED" ? "🔓"
+                          : notif.type?.toUpperCase() === "UNBLOCKED" ? "🔓"
+                          : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE") || notif.type?.toUpperCase() === "WARNING" ? "⚠️" 
+                          : "📥"}
+                        </span>
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: "0.95rem",
+                            color: "var(--neon-white)",
+                            fontWeight: "bold",
+                          }}
+                        >
+                          {notif.type === "GET_INVOLVED"
+                            ? <span>Heartist Team replied to your Get Involved submission: <span style={{ fontWeight: "normal", color: "#FDE68A" }}>{notif.content}</span></span>
+                            : notif.type?.toUpperCase() === "WARNING" 
+     ? <span>Admin 👑 gave you a warning: <span style={{ fontWeight: "normal" }}>{notif.content || "regarding your post or behavior."}</span></span>
+     : notif.type?.toUpperCase() === "PENALTY"
+     ? <span>Admin 👑 placed your account on penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+     : notif.type?.toUpperCase() === "PENALTY LIFTED"
+     ? <span>Admin 👑 lifted your penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+     : notif.type?.toUpperCase() === "UNBLOCKED"
+     ? <span>Admin 👑 unblocked your account: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+     : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE")
+     ? <span>Admin 👑 deleted your post/comment: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+     : notif.type?.toUpperCase().includes("REPORT") || notif.type?.toUpperCase().includes("MODERATION")
+     ? <span>Admin 👑 sent an update on your report/appeal: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+     : <span>Admin 👑 sent a message: <span style={{ fontWeight: "normal" }}>{notif.content || `New Message in ${notif.filterCategory === "prayer" ? "Prayer Request" : "General Chat"}`}</span></span>}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: "0.85rem",
+                            color: "var(--text-muted)",
+                            marginTop: "4px",
+                          }}
+                        >
+                          {formatTimeAgo(notif.timestamp)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+
+              let {
+                fullName: recentFullName,
+                avatar,
+                team,
+                badge,
+              } = getUserDetails(notif.users[0] || notif.postAuthor || "User");
+
+              if (
+                notif.type === "badge_update" ||
+                notif.type === "team_add" ||
+                notif.type === "team_remove" ||
+                notif.type === "prayer_deleted" ||
+                notif.type === "post_deleted" || notif.type === "comment_deleted"
+              ) {
+                badge = "admin";
+
+                // For admin actions, the actor is the admin, not the postAuthor.
+                const adminAcc = accounts.find(
+                  (a) => a.badge === "admin" && a.firstName,
+                );
+                if (adminAcc) {
+                  recentFullName = adminAcc.firstName;
+                  avatar = adminAcc.avatar || "👑";
+                } else {
+                  recentFullName = "Admin";
+                  avatar = "👑";
+                }
+                team = "none";
+              }
+
+              const teamColor = team && team !== "none" ? team : "transparent";
+
+              let actorsText = (
+                <span>
+                  {recentFullName}{" "}
+                  <span
+                    style={{
+                      opacity: 0.7,
+                      fontWeight: "normal",
+                      fontSize: "0.85em",
+                      marginLeft: "4px",
+                    }}
+                    title={badge}
+                  >
+                    {getRoleIcon(badge)}
+                  </span>
+                </span>
+              );
+              const isAdminAction =
+                notif.type === "badge_update" ||
+                notif.type === "team_add" ||
+                notif.type === "team_remove";
+              if (notif.users.length === 2 && !isAdminAction) {
+                const { fullName: secondFullName, badge: secondBadge } =
+                  getUserDetails(notif.users[1]);
+                actorsText = (
+                  <span>
+                    {recentFullName}{" "}
+                    <span
+                      style={{
+                        opacity: 0.7,
+                        fontWeight: "normal",
+                        fontSize: "0.85em",
+                        marginLeft: "4px",
+                      }}
+                      title={badge}
+                    >
+                      {getRoleIcon(badge)}
+                    </span>{" "}
+                    and {secondFullName}{" "}
+                    <span
+                      style={{
+                        opacity: 0.7,
+                        fontWeight: "normal",
+                        fontSize: "0.85em",
+                        marginLeft: "4px",
+                      }}
+                      title={secondBadge}
+                    >
+                      {getRoleIcon(secondBadge)}
+                    </span>
+                  </span>
+                );
+              } else if (notif.users.length > 2 && !isAdminAction) {
+                const { fullName: secondFullName, badge: secondBadge } =
+                  getUserDetails(notif.users[1]);
+                actorsText = (
+                  <span>
+                    {recentFullName}{" "}
+                    <span
+                      style={{
+                        opacity: 0.7,
+                        fontWeight: "normal",
+                        fontSize: "0.85em",
+                        marginLeft: "4px",
+                      }}
+                      title={badge}
+                    >
+                      {getRoleIcon(badge)}
+                    </span>
+                    , {secondFullName}{" "}
+                    <span
+                      style={{
+                        opacity: 0.7,
+                        fontWeight: "normal",
+                        fontSize: "0.85em",
+                        marginLeft: "4px",
+                      }}
+                      title={secondBadge}
+                    >
+                      {getRoleIcon(secondBadge)}
+                    </span>{" "}
+                    and {notif.users.length - 2} others
+                  </span>
+                );
+              }
+
+              return (
+                <div
+                  key={notif.id}
+                  onClick={async () => {
+                    const activeUserStr = localStorage.getItem("activeUser");
+                    if (!activeUserStr) return;
+                    const cUser = JSON.parse(activeUserStr).firstName;
+
+                    if (!notif.read) {
+                      if (notif.supabase_id) {
+                         const { markNotificationRead } = await import('@/lib/notificationsSync');
+                         await markNotificationRead(notif.supabase_id);
+                      }
+                      const allNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
+                      const updated = allNotifs.map((n: any) => 
+                        (n.postId === notif.postId && (n.type === notif.type || notif.type.includes(n.type))) ? { ...n, read: true } : n
+                      );
+                      localStorage.setItem("communityNotifications", JSON.stringify(updated));
+                      window.dispatchEvent(new Event("storage"));
+                    }
+
+                    if (notif.type === "GET_INVOLVED" || notif.type === "get_involved_response") {
+                      router.push("/get-involved?scrollTo=my-entries" + (notif.postId ? `&subId=${notif.postId}` : ""));
+                      return;
+                    }
+
+                    if (notif.type === "pray") {
+                      router.push("/prayer");
+                    } else if (
+                      notif.type.includes("comment") ||
+                      notif.type.includes("reply")
+                    ) {
+                      router.push(
+                        `/community?highlight=${notif.postId}&admin=${cUser === "Admin"}`
+                      );
+                    } else {
+                      router.push(
+                        `/community?highlight=${notif.postId}&admin=${cUser === "Admin"}`
+                      );
+                    }
+                  }}
+                  className="card"
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "flex-start",
+                    padding: "15px",
+                    borderLeft:
+                      notif.type === "prayer_deleted" ||
+                      notif.type === "post_deleted" || notif.type === "comment_deleted" ||
+                      notif.type === "warning" ||
+                      notif.type === "penalty"
+                        ? "4px solid #FF4444"
+                        : notif.type === "pray"
+                          ? "4px solid var(--neon-yellow)"
+                          : "4px solid var(--neon-white)",
+                    animation: "fadeIn 0.3s ease",
+                    gap: "6px",
+                    cursor: "pointer",
+                    transition:
+                      "transform 0.2s ease, box-shadow 0.2s ease, background 0.3s ease, opacity 0.3s ease",
+                    position: "relative",
+                    background: notif.read
+                      ? "rgba(255, 255, 255, 0.02)"
+                      : "rgba(255, 255, 255, 0.08)",
+                    opacity: notif.read ? 0.6 : 1,
+                  }}
+                  onMouseOver={(e) =>
+                    (e.currentTarget.style.transform = "scale(1.02)")
+                  }
+                  onMouseOut={(e) =>
+                    (e.currentTarget.style.transform = "scale(1)")
+                  }
+                >
+                  {!notif.read && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: "15px",
+                        right: "15px",
+                        width: "10px",
+                        height: "10px",
+                        background: "#FF4444",
+                        borderRadius: "50%",
+                      }}
+                    ></div>
+                  )}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "row",
+                      alignItems: "flex-start",
+                      gap: "12px",
+                      width: "100%",
+                    }}
+                  >
+                    {/* Avatar Wrapper with Overlapping Reaction */}
+                    <div style={{ position: "relative", flexShrink: 0 }}>
+                      <div
+                        style={{
+                          minWidth: "40px",
+                          minHeight: "40px",
+                          width: "40px",
+                          height: "40px",
+                          borderRadius: "50%",
+                          background: "rgba(255,255,255,0.1)",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "1.5rem",
+                          overflow: "hidden",
+                          border: `2px solid ${teamColor}`,
+                        }}
+                      >
+                        {avatar && avatar.length > 10 ? (
+                          <img
+                            src={avatar}
+                            alt={recentFullName}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              borderRadius: "50%",
+                              objectFit: "cover",
+                            }}
+                          />
+                        ) : (
+        <img src="https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg" alt="Avatar" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
+    )}
+                      </div>
+
+                      {/* Overlapping Heart Icon */}
+                      <div
+                        style={{
+                          position: "absolute",
+                          bottom: "-2px",
+                          right: "-2px",
+                          background: "var(--bg-color, #111)",
+                          borderRadius: "50%",
+                          padding: "2px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          border: "2px solid rgba(10, 10, 10, 0.95)",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            filter: notif.type.includes("mention")
+                              ? "drop-shadow(0 0 2px rgba(255,68,68,0.8))"
+                              : notif.type === "comment" ||
+                                  notif.type === "comment_reply"
+                                ? "drop-shadow(0 0 2px rgba(100,200,255,0.8))"
+                                : "drop-shadow(0 0 2px rgba(255,234,0,0.8))",
+                          }}
+                        >
+                          {notif.type === "pray"
+                            ? "🙏"
+                            : notif.type === "comment" ||
+                                notif.type === "comment_reply" ||
+                                (notif.type === "mention" &&
+                                  notif.mentionType === "post")
+                              ? "💬"
+                              : notif.type === "mention" &&
+                                  notif.mentionType !== "post"
+                                ? "@"
+                                : notif.type === "badge_update" ||
+                                    notif.type === "team_add" ||
+                                    notif.type === "team_remove"
+                                  ? "👑"
+                                  : notif.type === "prayer_deleted" ||
+                                      notif.type === "post_deleted" || notif.type === "comment_deleted"
+                                    ? "⚠️"
+                                    : "💛"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Content Block (Name + Action + Time) */}
+                    <div
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        marginTop: "9px",
+                        textAlign: "justify",
+                      }}
+                    >
+                      {/* Inline Text */}
+                      <div
+                        style={{
+                          fontSize: "0.9rem",
+                          color: "var(--neon-white)",
+                          lineHeight: "1.4",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontWeight: "bold",
+                            fontSize: "0.95rem",
+                            marginRight: "4px",
+                          }}
+                        >
+                          {actorsText}
+                        </span>
+                        {notif.type === "comment" ||
+                        notif.type === "comment_reply" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            {notif.type === "comment_reply"
+                              ? "replied to a comment on a post"
+                              : "commented on a post"}
+                            {notif.postContent && (
+                              <>
+                                :{" "}
+                                <span
+                                  style={{
+                                    fontStyle: "italic",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  "{notif.postContent}"
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        ) : notif.type === "badge_update" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            updated your role badge!
+                          </span>
+                        ) : notif.type === "team_add" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            assigned you a Team Color!
+                          </span>
+                        ) : notif.type === "team_remove" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            removed your Team Color.
+                          </span>
+                        ) : notif.type === "prayer_deleted" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            deleted your prayer request for violating guidelines.
+                          </span>
+                        ) : notif.type === "post_deleted" || notif.type === "comment_deleted" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            deleted your post/comment for violating guidelines.
+                          </span>
+                        ) : notif.type === "pray" ? (
+                          <span style={{ opacity: 0.9 }}>
+                            prayed for you
+                            {notif.postContent ? (
+                              <>
+                                :{" "}
+                                <span
+                                  style={{
+                                    fontStyle: "italic",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  "{notif.postContent}"
+                                </span>
+                              </>
+                            ) : (
+                              "."
+                            )}
+                          </span>
+                        ) : notif.type.includes("mention") ? (
+                          <span style={{ opacity: 0.9 }}>
+                            mentioned you in a {notif.mentionType}
+                            {notif.postContent ? (
+                              <>
+                                :{" "}
+                                <span
+                                  style={{
+                                    fontStyle: "italic",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  "{notif.postContent}"
+                                </span>
+                              </>
+                            ) : (
+                              "."
+                            )}
+                          </span>
+                        ) : (
+                          <span style={{ opacity: 0.9 }}>
+                            reacted to a post
+                            {notif.postContent && (
+                              <>
+                                :{" "}
+                                <span
+                                  style={{
+                                    fontStyle: "italic",
+                                    color: "var(--text-muted)",
+                                  }}
+                                >
+                                  "{notif.postContent}"
+                                </span>
+                              </>
+                            )}
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: "var(--text-muted)",
+                          marginTop: "6px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "6px",
+                        }}
+                      >
+                        <span style={{ opacity: 0.7 }}>•</span>
+                        {formatTimeAgo(notif.timestamp)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </section>
+      <div
+        style={{ textAlign: "center", marginTop: "auto", paddingTop: "40px" }}
+      >
+        <button
+          onClick={() => router.back()}
+          className="nav-item"
+          style={{
+            padding: "10px 20px",
+            background: "transparent",
+            border: "1px solid var(--neon-yellow)",
+            borderRadius: "8px",
+            color: "var(--neon-yellow)",
+            fontFamily: "var(--font-outfit)",
+            cursor: "pointer",
+            fontSize: "1rem",
+            transition: "all 0.3s ease-in-out",
+          }}
+        >
+          Go Back
+        </button>
+      </div>
+    </main>
+  );
+}
