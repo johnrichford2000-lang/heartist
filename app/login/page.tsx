@@ -919,9 +919,9 @@ export default function LoginPage() {
               {/* Birthday and Contact Number (Balanced Responsive Grid) */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", width: "100%" }}>
                 {/* Birthday Field */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0, textAlign: "left" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                    <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)", textAlign: "left" }}>
                       Birthday
                     </label>
                     {regBirthDate && calculateAge(regBirthDate) > 0 && (
@@ -938,23 +938,28 @@ export default function LoginPage() {
                     style={{ 
                       width: "100%", 
                       height: "44px", 
+                      minHeight: "44px",
+                      maxHeight: "44px",
                       boxSizing: "border-box", 
-                      padding: "0 14px", 
+                      padding: "8px 14px", 
                       borderRadius: "8px", 
                       background: "rgba(0,0,0,0.5)", 
                       border: "1px solid rgba(255,255,255,0.2)", 
                       color: "white", 
                       colorScheme: "dark", 
+                      WebkitAppearance: "none",
+                      appearance: "none",
                       outline: "none", 
                       fontFamily: "var(--font-outfit)", 
-                      fontSize: "0.95rem" 
+                      fontSize: "0.95rem",
+                      textAlign: "left"
                     }}
                   />
                 </div>
 
                 {/* Contact Number Field */}
-                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
-                  <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0, textAlign: "left" }}>
+                  <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)", textAlign: "left" }}>
                     Contact Number (Optional)
                   </label>
                   <input 
@@ -965,8 +970,10 @@ export default function LoginPage() {
                     style={{ 
                       width: "100%", 
                       height: "44px", 
+                      minHeight: "44px",
+                      maxHeight: "44px",
                       boxSizing: "border-box", 
-                      padding: "0 14px", 
+                      padding: "8px 14px", 
                       borderRadius: "8px", 
                       background: "rgba(0,0,0,0.5)", 
                       border: "1px solid rgba(255,255,255,0.2)", 

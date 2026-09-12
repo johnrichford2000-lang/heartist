@@ -997,3 +997,30 @@ html {
   border: 1.5px solid var(--neon-yellow) !important;
 }
 
+/* Fix iOS Safari Date Input Height and Centering */
+input[type="date"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 44px !important;
+  line-height: normal !important;
+  box-sizing: border-box !important;
+}
+
+input[type="date"]::-webkit-date-and-time-value {
+  min-height: auto !important;
+  height: 1.2em !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  text-align: left !important;
+  line-height: normal !important;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(1);
+  opacity: 0.7;
+}
+
+
