@@ -5,8 +5,9 @@ import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
 import { supabase } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
+import CustomDropdown from "@/components/CustomDropdown";
 
-const AVATARS = ["👦🏽", "👧🏻", "👨🏼‍🦱", "👩🏽‍🦰", "🧑🏽", "👱🏼‍♂️", "👱🏻‍♀️", "🧔🏽‍♂️"];
+const DEFAULT_AVATAR = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
 const ROLES = [
   { id: "first-timer", label: "First-timer 🐣" },
   { id: "camp-veteran", label: "Camp Veteran 🎖️" },
@@ -32,14 +33,53 @@ export default function LoginPage() {
   
   // Register fields
   const [regFirstName, setRegFirstName] = useState("");
+  const [regMiddleName, setRegMiddleName] = useState("");
   const [regLastName, setRegLastName] = useState("");
   const [regBirthDate, setRegBirthDate] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regContact, setRegContact] = useState("");
   const [regPassword, setRegPassword] = useState("");
+  const [regConfirmPassword, setRegConfirmPassword] = useState("");
   const [regBadge, setRegBadge] = useState(ROLES[0].id);
-  const [selectedAvatar, setSelectedAvatar] = useState(AVATARS[0]);
+  const [selectedAvatar, setSelectedAvatar] = useState(DEFAULT_AVATAR);
   const [showRegPwd, setShowRegPwd] = useState(false);
+  const [showRegConfirmPwd, setShowRegConfirmPwd] = useState(false);
+
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        setError("Image file size should be less than 5MB.");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement("canvas");
+          const MAX_SIZE = 300;
+          let w = img.width;
+          let h = img.height;
+          if (w > MAX_SIZE || h > MAX_SIZE) {
+            const ratio = Math.min(MAX_SIZE / w, MAX_SIZE / h);
+            w = w * ratio;
+            h = h * ratio;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, w, h);
+            setSelectedAvatar(canvas.toDataURL("image/jpeg", 0.85));
+          } else {
+            setSelectedAvatar(reader.result as string);
+          }
+        };
+        img.src = reader.result as string;
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -82,7 +122,7 @@ export default function LoginPage() {
         birth_date: isAdmin ? null : (meta.birth_date || null),
         contact_number: isAdmin ? "" : (meta.contact_number || ""),
         badge: isAdmin ? "Admin" : (meta.badge || "first-timer"),
-        avatar_url: isAdmin ? "👑" : (meta.avatar_url || "👦🏽")
+        avatar_url: isAdmin ? "👑" : (meta.avatar_url || DEFAULT_AVATAR)
       };
       
       const { data: insertedProfile, error: insertError } = await supabase
@@ -132,6 +172,7 @@ export default function LoginPage() {
       id: profileData.id,
       avatar: profileData.avatar_url,
       firstName: profileData.first_name,
+      middleName: user.user_metadata?.middle_name || "",
       lastName: profileData.last_name,
       age: profileData.age,
       birthDate: profileData.birth_date,
@@ -192,14 +233,29 @@ export default function LoginPage() {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!regFirstName || !regLastName || !regBirthDate || !regEmail || !regContact || !regPassword) {
-      setError("Please fill in all fields.");
+    if (!regFirstName.trim() || !regLastName.trim() || !regBirthDate || !regEmail.trim() || !regContact.trim() || !regPassword || !regConfirmPassword) {
+      setError("Please fill in all required fields.");
       return;
     }
 
     const nameRegex = /^[A-Za-z\s]+$/;
     if (!nameRegex.test(regFirstName.trim()) || !nameRegex.test(regLastName.trim())) {
       setError("First Name and Last Name must only contain letters.");
+      return;
+    }
+
+    if (regMiddleName.trim() && !nameRegex.test(regMiddleName.trim())) {
+      setError("Middle Name must only contain letters.");
+      return;
+    }
+
+    if (regPassword.length < 6) {
+      setError("Password must be at least 6 characters long.");
+      return;
+    }
+
+    if (regPassword !== regConfirmPassword) {
+      setError("Passwords do not match. Please verify your password.");
       return;
     }
 
@@ -233,10 +289,11 @@ export default function LoginPage() {
         password: regPassword,
         options: {
           data: {
-            first_name: regFirstName,
-            last_name: regLastName,
+            first_name: regFirstName.trim(),
+            middle_name: regMiddleName.trim(),
+            last_name: regLastName.trim(),
             birth_date: regBirthDate,
-            contact_number: regContact,
+            contact_number: regContact.trim(),
             badge: regBadge,
             avatar_url: selectedAvatar
           }
@@ -401,57 +458,121 @@ export default function LoginPage() {
           ) : (
             <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               
+              {/* Profile Picture Section */}
               <div style={{ textAlign: "center", marginBottom: "10px" }}>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginBottom: "10px", fontFamily: "var(--font-outfit)" }}>Choose an Avatar</p>
-                <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", gap: "10px" }}>
-                  {AVATARS.map(avatar => (
-                    <div 
-                      key={avatar} 
-                      onClick={() => setSelectedAvatar(avatar)}
+                <p style={{ color: "var(--neon-white)", fontSize: "0.85rem", marginBottom: "8px", fontFamily: "var(--font-outfit)", fontWeight: "bold" }}>
+                  Profile
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                  <div 
+                    onClick={() => document.getElementById("reg-avatar-upload")?.click()}
+                    style={{
+                      width: "80px",
+                      height: "80px",
+                      borderRadius: "50%",
+                      border: "2px solid var(--neon-yellow)",
+                      position: "relative",
+                      cursor: "pointer",
+                      overflow: "hidden",
+                      boxShadow: "0 0 15px rgba(255, 234, 0, 0.2)",
+                      background: "#000",
+                      transition: "transform 0.2s"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.05)"}
+                    onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                    title="Click to change profile picture"
+                  >
+                    <img 
+                      src={selectedAvatar} 
+                      alt="Profile" 
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                    />
+                    <div style={{ 
+                      position: "absolute", 
+                      bottom: "0", 
+                      left: "0", 
+                      right: "0", 
+                      background: "rgba(0,0,0,0.65)", 
+                      color: "var(--neon-yellow)", 
+                      fontSize: "0.65rem", 
+                      padding: "2px 0",
+                      textAlign: "center",
+                      fontFamily: "var(--font-outfit)"
+                    }}>
+                      Edit ✏️
+                    </div>
+                  </div>
+
+                  <input 
+                    type="file" 
+                    id="reg-avatar-upload" 
+                    accept="image/*" 
+                    style={{ display: "none" }} 
+                    onChange={handleAvatarUpload} 
+                  />
+
+                  {selectedAvatar !== DEFAULT_AVATAR ? (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAvatar(DEFAULT_AVATAR)}
                       style={{
-                        fontSize: "1.8rem",
-                        padding: "5px",
+                        background: "none",
+                        border: "1px solid rgba(255,255,255,0.2)",
+                        borderRadius: "12px",
+                        color: "var(--text-muted)",
+                        fontSize: "0.75rem",
+                        padding: "2px 8px",
                         cursor: "pointer",
-                        border: selectedAvatar === avatar ? "2px solid var(--neon-yellow)" : "2px solid transparent",
-                        borderRadius: "50%",
-                        background: selectedAvatar === avatar ? "rgba(255,234,0,0.1)" : "transparent",
-                        transition: "all 0.2s"
+                        fontFamily: "var(--font-outfit)"
                       }}
                     >
-                      {avatar}
-                    </div>
-                  ))}
+                      Revert to Default Picture
+                    </button>
+                  ) : (
+                    <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontFamily: "var(--font-outfit)" }}>
+                      Default Profile Picture
+                    </span>
+                  )}
                 </div>
               </div>
 
+              {/* Name Fields: First, Middle, Last */}
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <input 
                   type="text" 
-                  placeholder="First Name" 
+                  placeholder="First Name *" 
                   value={regFirstName}
                   onChange={(e) => setRegFirstName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                  style={{ flex: "1 1 140px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
                 <input 
                   type="text" 
-                  placeholder="Last Name" 
+                  placeholder="Middle Name" 
+                  title="Middle Name (Optional for formality)"
+                  value={regMiddleName}
+                  onChange={(e) => setRegMiddleName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                />
+                <input 
+                  type="text" 
+                  placeholder="Last Name *" 
                   value={regLastName}
                   onChange={(e) => setRegLastName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                  style={{ flex: "1 1 140px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
               </div>
 
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <input 
                   type="date" 
-                  title="Birthday"
+                  title="Birthday *"
                   value={regBirthDate}
                   onChange={(e) => setRegBirthDate(e.target.value)}
                   style={{ flex: "1 1 140px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
                 <input 
                   type="tel" 
-                  placeholder="Contact Number" 
+                  placeholder="Contact Number *" 
                   value={regContact}
                   onChange={(e) => setRegContact(e.target.value)}
                   style={{ flex: "2 1 160px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -460,32 +581,47 @@ export default function LoginPage() {
 
               <input 
                 type="email" 
-                placeholder="Email Address" 
+                placeholder="Email Address *" 
                 value={regEmail}
                 onChange={(e) => setRegEmail(e.target.value)}
                 style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
               />
 
-              <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                <label style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Camper Badge</label>
-                <select 
+              {/* Camper Badge Uniform Custom Dropdown */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "0.85rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                  Camper Badge
+                </label>
+                <CustomDropdown 
+                  options={ROLES.map(r => ({
+                    value: r.id,
+                    label: r.label,
+                    renderLabel: (
+                      <span>
+                        <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold", marginRight: "6px" }}>
+                          {r.label.split(" ")[0]}
+                        </strong>
+                        <span style={{ color: "rgba(255,255,255,0.9)" }}>
+                          {r.label.split(" ").slice(1).join(" ")}
+                        </span>
+                      </span>
+                    )
+                  }))}
                   value={regBadge}
-                  onChange={(e) => setRegBadge(e.target.value)}
-                  style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                >
-                  {ROLES.map(r => <option key={r.id} value={r.id}>{r.label}</option>)}
-                </select>
-                <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "2px 0 5px 5px", fontStyle: "italic", lineHeight: "1.3" }}>
+                  onChange={(val) => setRegBadge(val)}
+                />
+                <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
                   {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
                   {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
                   {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
                 </p>
               </div>
               
+              {/* Create Password */}
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <input 
                   type={showRegPwd ? "text" : "password"} 
-                  placeholder="Create Password" 
+                  placeholder="Create Password (min. 6 chars) *" 
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -494,10 +630,53 @@ export default function LoginPage() {
                   type="button"
                   onClick={() => setShowRegPwd(!showRegPwd)}
                   style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
+                  title={showRegPwd ? "Hide password" : "Show password"}
                 >
                   {showRegPwd ? "💛" : "💔"}
                 </button>
               </div>
+
+              {/* Confirm Password */}
+              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                <input 
+                  type={showRegConfirmPwd ? "text" : "password"} 
+                  placeholder="Confirm Password *" 
+                  value={regConfirmPassword}
+                  onChange={(e) => setRegConfirmPassword(e.target.value)}
+                  style={{ 
+                    width: "100%", 
+                    paddingTop: "12px", 
+                    paddingBottom: "12px", 
+                    paddingLeft: "15px", 
+                    paddingRight: "45px", 
+                    borderRadius: "8px", 
+                    background: "rgba(0,0,0,0.5)", 
+                    border: regConfirmPassword && regPassword !== regConfirmPassword 
+                      ? "1px solid #FF4D4D" 
+                      : regConfirmPassword && regPassword === regConfirmPassword 
+                        ? "1px solid #00FF88" 
+                        : "1px solid rgba(255,255,255,0.2)", 
+                    color: "white", 
+                    outline: "none", 
+                    fontFamily: "var(--font-outfit)", 
+                    fontSize: "1rem" 
+                  }}
+                />
+                <button 
+                  type="button"
+                  onClick={() => setShowRegConfirmPwd(!showRegConfirmPwd)}
+                  style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
+                  title={showRegConfirmPwd ? "Hide password" : "Show password"}
+                >
+                  {showRegConfirmPwd ? "💛" : "💔"}
+                </button>
+              </div>
+
+              {regConfirmPassword && regPassword !== regConfirmPassword && (
+                <p style={{ color: "#FF6B6B", fontSize: "0.75rem", margin: "-8px 0 0 5px", fontFamily: "var(--font-outfit)" }}>
+                  Passwords do not match
+                </p>
+              )}
 
               <button 
                 type="submit"
