@@ -1288,7 +1288,7 @@ export default function LoginPage() {
             {/* Intro */}
             <div style={{ background: "rgba(255, 234, 0, 0.05)", borderLeft: "3px solid var(--neon-yellow)", padding: "10px 14px", borderRadius: "0 8px 8px 0" }}>
               <p style={{ fontSize: "0.88rem", margin: 0, color: "var(--neon-white)", lineHeight: "1.5" }}>
-                Welcome sa <strong>Heartist</strong>! Ang portal na ito ay nilikha para sa ating pananampalataya, paglikha ng sining, at pagkakaisa bilang mga tagasunod ni Kristo.
+                Welcome to <strong>Heartist</strong>! This portal was created to nurture our faith, inspire creative expression, and foster unity as followers of Christ.
               </p>
             </div>
 
@@ -1299,7 +1299,7 @@ export default function LoginPage() {
                   01. Christ-Centered & Safe Space
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
-                  Panatilihing magalang, mapagpakumbaba, at nakapagpapatibay ang bawat interaksyon. Mahigpit na ipinagbabawal ang anumang pambu-bully, paninirang-puri, masasamang salita, o bastos na komento.
+                  Keep every interaction respectful, humble, and uplifting. Any form of bullying, harassment, defamation, foul language, or inappropriate conduct is strictly prohibited.
                 </p>
               </div>
 
@@ -1308,7 +1308,7 @@ export default function LoginPage() {
                   02. Authentic & God-Honoring Creativity
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
-                  Ibahagi ang iyong mga sining, debosyon, at panalangin nang may katapatan at pagpupuri sa Diyos. Igalang ang gawa ng iba at huwag mag-post ng hindi naaangkop o hindi sa iyo nang walang pahintulot.
+                  Share your artwork, devotions, and reflections with sincerity and honor to God. Respect the creative work of others, and refrain from posting inappropriate content or material that is not your own without permission.
                 </p>
               </div>
 
@@ -1317,7 +1317,7 @@ export default function LoginPage() {
                   03. Peace, Prayer & Fellowship
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
-                  Ang prayer wall at community spaces ay para sa pagtutulungan at pagdarasal sa isa&apos;t isa. Panatilihing sagrado at mapayapa ang mga talakayan.
+                  The prayer wall and community spaces exist to encourage, support, and lift one another up in prayer. Keep all discussions peaceful, gracious, and uplifting.
                 </p>
               </div>
 
@@ -1326,7 +1326,7 @@ export default function LoginPage() {
                   04. Privacy & Account Responsibility
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
-                  Ingatan ang iyong password at impormasyon. Igalang din ang pribadong impormasyon at prayer requests ng iyong mga kasama sa camp.
+                  Safeguard your password and personal information. Respect the privacy and confidentiality of your fellow camp attendees, including their personal stories and prayer requests.
                 </p>
               </div>
             </div>
