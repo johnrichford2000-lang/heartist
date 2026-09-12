@@ -93,12 +93,21 @@ export default function LoginPage() {
     if (saved) {
       setAccounts(JSON.parse(saved));
     }
+    if (typeof window !== "undefined") {
+      const savedRemember = localStorage.getItem("heartistRememberMe");
+      const savedEmail = localStorage.getItem("heartistRememberMeEmail");
+      if (savedRemember === "true" && savedEmail) {
+        setRememberMe(true);
+        setLoginIdentifier(savedEmail);
+      }
+    }
   }, []);
   
   // Login fields
   const [loginIdentifier, setLoginIdentifier] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [showLoginPwd, setShowLoginPwd] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   
   // Register fields
   const [regFirstName, setRegFirstName] = useState("");
@@ -337,6 +346,13 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       if (data.user) {
+        if (rememberMe) {
+          localStorage.setItem("heartistRememberMe", "true");
+          localStorage.setItem("heartistRememberMeEmail", loginIdentifier.trim());
+        } else {
+          localStorage.removeItem("heartistRememberMe");
+          localStorage.removeItem("heartistRememberMeEmail");
+        }
         await processPostLogin(data.user);
       }
     } catch (err: any) {
@@ -1044,84 +1060,107 @@ export default function LoginPage() {
               </button>
             </form>
           ) : activeTab === "login" ? (
-            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-              <input 
-                type="text" 
-                placeholder="Email or First Name" 
-                value={loginIdentifier}
-                onChange={(e) => setLoginIdentifier(e.target.value)}
-                style={{ padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-              />
-              <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            <form onSubmit={handleLogin} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+              {/* Email / First Name field with lower-right Change Email? */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
                 <input 
-                  type={showLoginPwd ? "text" : "password"} 
-                  placeholder="Password" 
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  type="text" 
+                  placeholder="Email or First Name" 
+                  value={loginIdentifier}
+                  onChange={(e) => setLoginIdentifier(e.target.value)}
+                  style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
-                <button 
-                  type="button"
-                  onClick={() => setShowLoginPwd(!showLoginPwd)}
-                  style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
-                >
-                  {showLoginPwd ? "💛" : "💔"}
-                </button>
+                <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px", paddingRight: "2px" }}>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowChangeEmailModal(true);
+                      setChangeEmailError("");
+                      setChangeEmailMessage("");
+                      setChangeCurrentIdentifier(loginIdentifier);
+                      setChangeCurrentPassword("");
+                      setChangeNewEmail("");
+                    }} 
+                    style={{ 
+                      background: "none", 
+                      border: "none", 
+                      color: "var(--text-muted)", 
+                      fontSize: "0.8rem", 
+                      cursor: "pointer", 
+                      textDecoration: "underline", 
+                      padding: "2px 0", 
+                      fontFamily: "var(--font-outfit)",
+                      transition: "color 0.2s"
+                    }}
+                    onMouseOver={(e) => (e.currentTarget.style.color = "var(--neon-yellow)")}
+                    onMouseOut={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                  >
+                    Change Email?
+                  </button>
+                </div>
               </div>
 
-              {/* Quick Actions: Forgot Password & Change Email */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "-6px", marginBottom: "2px", padding: "0 2px" }}>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setShowForgotPwdModal(true);
-                    setForgotError("");
-                    setForgotMessage("");
-                    setForgotStep("request");
-                    setForgotEmail(loginIdentifier.includes("@") ? loginIdentifier : "");
-                    setForgotCode("");
-                    setForgotNewPassword("");
-                    setForgotConfirmPassword("");
-                  }} 
-                  style={{ 
-                    background: "none", 
-                    border: "none", 
-                    color: "var(--neon-yellow)", 
-                    fontSize: "0.82rem", 
-                    cursor: "pointer", 
-                    textDecoration: "underline", 
-                    padding: 0, 
-                    fontFamily: "var(--font-outfit)" 
-                  }}
-                >
-                  Forgot Password?
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => {
-                    setShowChangeEmailModal(true);
-                    setChangeEmailError("");
-                    setChangeEmailMessage("");
-                    setChangeCurrentIdentifier(loginIdentifier);
-                    setChangeCurrentPassword("");
-                    setChangeNewEmail("");
-                  }} 
-                  style={{ 
-                    background: "none", 
-                    border: "none", 
-                    color: "var(--text-muted)", 
-                    fontSize: "0.82rem", 
-                    cursor: "pointer", 
-                    textDecoration: "underline", 
-                    padding: 0, 
-                    fontFamily: "var(--font-outfit)",
-                    transition: "color 0.2s"
-                  }}
-                  onMouseOver={(e) => (e.currentTarget.style.color = "var(--neon-yellow)")}
-                  onMouseOut={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
-                >
-                  Change Email?
-                </button>
+              {/* Password field with lower-right Forgot Password? and Remember Me checkbox */}
+              <div style={{ display: "flex", flexDirection: "column" }}>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input 
+                    type={showLoginPwd ? "text" : "password"} 
+                    placeholder="Password" 
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowLoginPwd(!showLoginPwd)}
+                    style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
+                  >
+                    {showLoginPwd ? "💛" : "💔"}
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "6px", padding: "0 2px" }}>
+                  <label style={{ display: "inline-flex", alignItems: "center", gap: "7px", cursor: "pointer", fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", userSelect: "none" }}>
+                    <input 
+                      type="checkbox" 
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      style={{ 
+                        width: "16px", 
+                        height: "16px", 
+                        cursor: "pointer", 
+                        accentColor: "var(--neon-yellow)" 
+                      }}
+                    />
+                    Remember Me
+                  </label>
+
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setShowForgotPwdModal(true);
+                      setForgotError("");
+                      setForgotMessage("");
+                      setForgotStep("request");
+                      setForgotEmail(loginIdentifier.includes("@") ? loginIdentifier : "");
+                      setForgotCode("");
+                      setForgotNewPassword("");
+                      setForgotConfirmPassword("");
+                    }} 
+                    style={{ 
+                      background: "none", 
+                      border: "none", 
+                      color: "var(--neon-yellow)", 
+                      fontSize: "0.8rem", 
+                      cursor: "pointer", 
+                      textDecoration: "underline", 
+                      padding: "2px 0", 
+                      fontFamily: "var(--font-outfit)" 
+                    }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
               </div>
 
               <button 
