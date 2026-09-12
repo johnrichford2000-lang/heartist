@@ -47,6 +47,29 @@ export default function LoginPage() {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
+  // Forgot Password modal state
+  const [showForgotPwdModal, setShowForgotPwdModal] = useState(false);
+  const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
+  const [forgotEmail, setForgotEmail] = useState("");
+  const [forgotCode, setForgotCode] = useState("");
+  const [forgotNewPassword, setForgotNewPassword] = useState("");
+  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
+  const [showForgotNewPwd, setShowForgotNewPwd] = useState(false);
+  const [showForgotConfirmPwd, setShowForgotConfirmPwd] = useState(false);
+  const [isForgotLoading, setIsForgotLoading] = useState(false);
+  const [forgotError, setForgotError] = useState("");
+  const [forgotMessage, setForgotMessage] = useState("");
+
+  // Change Email Address modal state
+  const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
+  const [changeCurrentIdentifier, setChangeCurrentIdentifier] = useState("");
+  const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
+  const [changeNewEmail, setChangeNewEmail] = useState("");
+  const [showChangeCurrentPwd, setShowChangeCurrentPwd] = useState(false);
+  const [isChangeEmailLoading, setIsChangeEmailLoading] = useState(false);
+  const [changeEmailError, setChangeEmailError] = useState("");
+  const [changeEmailMessage, setChangeEmailMessage] = useState("");
+
   // Verification timers (2-minute code expiration, 1-minute resend cooldown)
   const [codeExpiry, setCodeExpiry] = useState(120);
   const [resendCooldown, setResendCooldown] = useState(60);
@@ -505,6 +528,193 @@ export default function LoginPage() {
     }
   };
 
+  const handleRequestResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isForgotLoading) return;
+    setForgotError("");
+    setForgotMessage("");
+
+    const email = forgotEmail.trim();
+    if (!email || !email.includes("@")) {
+      setForgotError("Please enter a valid email address.");
+      return;
+    }
+
+    setIsForgotLoading(true);
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+      if (resetError) throw resetError;
+
+      setForgotStep("verify");
+      setForgotMessage("A 6-digit password reset code has been sent to your email. Please enter it below along with your new password.");
+    } catch (err: any) {
+      setForgotError(err.message || "Failed to send reset code. Please verify the email and try again.");
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
+  const handleVerifyAndSetNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isForgotLoading) return;
+    setForgotError("");
+    setForgotMessage("");
+
+    const code = forgotCode.trim();
+    if (!code || code.length !== 6) {
+      setForgotError("Please enter the 6-digit code sent to your email.");
+      return;
+    }
+
+    if (forgotNewPassword.length < 6) {
+      setForgotError("New password must be at least 6 characters long.");
+      return;
+    }
+
+    if (forgotNewPassword !== forgotConfirmPassword) {
+      setForgotError("Passwords do not match.");
+      return;
+    }
+
+    setIsForgotLoading(true);
+    try {
+      // 1. Verify OTP token for recovery
+      const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
+        email: forgotEmail.trim(),
+        token: code,
+        type: "recovery"
+      });
+
+      if (verifyError) throw verifyError;
+
+      // 2. Update to new password
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: forgotNewPassword
+      });
+
+      if (updateError) throw updateError;
+
+      // 3. Clean up session and close modal
+      await supabase.auth.signOut();
+      localStorage.removeItem("isHeartistLoggedIn");
+      localStorage.removeItem("activeUser");
+      localStorage.removeItem("isAdminLoggedIn");
+
+      setShowForgotPwdModal(false);
+      setLoginIdentifier(forgotEmail.trim());
+      setLoginPassword("");
+      setMessage("Password successfully reset! Please log in with your new password.");
+      setError("");
+    } catch (err: any) {
+      setForgotError(err.message || "Invalid or expired reset code. Please try requesting a new one.");
+    } finally {
+      setIsForgotLoading(false);
+    }
+  };
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isChangeEmailLoading) return;
+    setChangeEmailError("");
+    setChangeEmailMessage("");
+
+    const currentIdent = changeCurrentIdentifier.trim();
+    const currentPwd = changeCurrentPassword;
+    const newEmail = changeNewEmail.trim();
+
+    if (!currentIdent || !currentPwd || !newEmail) {
+      setChangeEmailError("Please fill in all fields.");
+      return;
+    }
+
+    if (!newEmail.includes("@") || !newEmail.includes(".")) {
+      setChangeEmailError("Please enter a valid new email address.");
+      return;
+    }
+
+    setIsChangeEmailLoading(true);
+    try {
+      let emailToAuthenticate = currentIdent;
+
+      // If user typed first name instead of email
+      if (!emailToAuthenticate.includes("@")) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email")
+          .ilike("first_name", emailToAuthenticate)
+          .maybeSingle();
+
+        if (profile && profile.email) {
+          emailToAuthenticate = profile.email;
+        } else {
+          setChangeEmailError("Account not found with that First Name.");
+          return;
+        }
+      }
+
+      if (emailToAuthenticate.toLowerCase() === newEmail.toLowerCase()) {
+        setChangeEmailError("The new email address cannot be the same as your current email.");
+        return;
+      }
+
+      // Check if new email is already taken in profiles
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("id")
+        .eq("email", newEmail)
+        .maybeSingle();
+
+      if (existingProfile) {
+        setChangeEmailError("This new email address is already registered to another account.");
+        return;
+      }
+
+      // Authenticate with current credentials
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: emailToAuthenticate,
+        password: currentPwd
+      });
+
+      if (authError || !authData.user) {
+        setChangeEmailError("Incorrect current email/first name or password.");
+        return;
+      }
+
+      const userId = authData.user.id;
+
+      // Update email in Supabase Auth
+      const { error: updateAuthError } = await supabase.auth.updateUser({
+        email: newEmail
+      });
+
+      if (updateAuthError) throw updateAuthError;
+
+      // Update email in PostgreSQL profiles table
+      const { error: updateProfileError } = await supabase
+        .from("profiles")
+        .update({ email: newEmail })
+        .eq("id", userId);
+
+      if (updateProfileError) throw updateProfileError;
+
+      // Sign out to enforce clean login with new email
+      await supabase.auth.signOut();
+      localStorage.removeItem("isHeartistLoggedIn");
+      localStorage.removeItem("activeUser");
+      localStorage.removeItem("isAdminLoggedIn");
+
+      setShowChangeEmailModal(false);
+      setLoginIdentifier(newEmail);
+      setLoginPassword("");
+      setMessage("Email address updated successfully! Please log in using your new email.");
+      setError("");
+    } catch (err: any) {
+      setChangeEmailError(err.message || "Failed to update email address. Please try again.");
+    } finally {
+      setIsChangeEmailLoading(false);
+    }
+  };
+
   return (
     <main className="main-container" style={{ padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
       {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Main Home) */}
@@ -858,6 +1068,62 @@ export default function LoginPage() {
                   {showLoginPwd ? "💛" : "💔"}
                 </button>
               </div>
+
+              {/* Quick Actions: Forgot Password & Change Email */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "-6px", marginBottom: "2px", padding: "0 2px" }}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowForgotPwdModal(true);
+                    setForgotError("");
+                    setForgotMessage("");
+                    setForgotStep("request");
+                    setForgotEmail(loginIdentifier.includes("@") ? loginIdentifier : "");
+                    setForgotCode("");
+                    setForgotNewPassword("");
+                    setForgotConfirmPassword("");
+                  }} 
+                  style={{ 
+                    background: "none", 
+                    border: "none", 
+                    color: "var(--neon-yellow)", 
+                    fontSize: "0.82rem", 
+                    cursor: "pointer", 
+                    textDecoration: "underline", 
+                    padding: 0, 
+                    fontFamily: "var(--font-outfit)" 
+                  }}
+                >
+                  Forgot Password?
+                </button>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setShowChangeEmailModal(true);
+                    setChangeEmailError("");
+                    setChangeEmailMessage("");
+                    setChangeCurrentIdentifier(loginIdentifier);
+                    setChangeCurrentPassword("");
+                    setChangeNewEmail("");
+                  }} 
+                  style={{ 
+                    background: "none", 
+                    border: "none", 
+                    color: "var(--text-muted)", 
+                    fontSize: "0.82rem", 
+                    cursor: "pointer", 
+                    textDecoration: "underline", 
+                    padding: 0, 
+                    fontFamily: "var(--font-outfit)",
+                    transition: "color 0.2s"
+                  }}
+                  onMouseOver={(e) => (e.currentTarget.style.color = "var(--neon-yellow)")}
+                  onMouseOut={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
+                >
+                  Change Email?
+                </button>
+              </div>
+
               <button 
                 type="submit"
                 disabled={isLoggingIn}
@@ -1420,6 +1686,434 @@ export default function LoginPage() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot Password Modal */}
+      {showForgotPwdModal && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px"
+          }}
+          onClick={() => setShowForgotPwdModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "rgba(18, 18, 20, 0.98)",
+              border: "1px solid var(--neon-yellow)",
+              borderRadius: "16px",
+              padding: "28px 24px",
+              maxWidth: "460px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 0 35px rgba(255, 234, 0, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              color: "#fff",
+              fontFamily: "var(--font-outfit)",
+              position: "relative"
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ fontSize: "1.3rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
+                  Reset Password
+                </h2>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                  {forgotStep === "request" 
+                    ? "Enter your registered email to receive a 6-digit reset code."
+                    : "Enter the reset code sent to your email and choose a new password."}
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowForgotPwdModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  lineHeight: "1",
+                  padding: "0 4px"
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {forgotError && (
+              <p style={{ color: "#FF6B6B", fontSize: "0.85rem", margin: 0, background: "rgba(255,107,107,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,107,107,0.2)" }}>
+                {forgotError}
+              </p>
+            )}
+            {forgotMessage && (
+              <p style={{ color: "#00FF80", fontSize: "0.85rem", margin: 0, background: "rgba(0,255,128,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(0,255,128,0.2)" }}>
+                {forgotMessage}
+              </p>
+            )}
+
+            {forgotStep === "request" ? (
+              <form onSubmit={handleRequestResetPassword} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    Registered Email
+                  </label>
+                  <input 
+                    type="email" 
+                    placeholder="name@example.com" 
+                    value={forgotEmail}
+                    onChange={(e) => setForgotEmail(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    disabled={isForgotLoading}
+                    className="glow-text-yellow"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      background: isForgotLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      color: "#000",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      fontSize: "0.95rem",
+                      cursor: isForgotLoading ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isForgotLoading ? "Sending Code..." : "Send Reset Code"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowForgotPwdModal(false)}
+                    style={{
+                      padding: "12px 18px",
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.95rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAndSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    6-Digit Reset Code
+                  </label>
+                  <input 
+                    type="text" 
+                    placeholder="123456" 
+                    maxLength={6}
+                    value={forgotCode}
+                    onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", textAlign: "center", letterSpacing: "4px", fontWeight: "bold", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid var(--neon-yellow)", color: "var(--neon-yellow)", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1.2rem" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    New Password (min. 6 chars)
+                  </label>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input 
+                      type={showForgotNewPwd ? "text" : "password"} 
+                      placeholder="Enter new password" 
+                      value={forgotNewPassword}
+                      onChange={(e) => setForgotNewPassword(e.target.value)}
+                      required
+                      style={{ width: "100%", padding: "12px 14px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowForgotNewPwd(!showForgotNewPwd)}
+                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
+                    >
+                      {showForgotNewPwd ? "💛" : "💔"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    Confirm New Password
+                  </label>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input 
+                      type={showForgotConfirmPwd ? "text" : "password"} 
+                      placeholder="Confirm new password" 
+                      value={forgotConfirmPassword}
+                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
+                      required
+                      style={{ width: "100%", padding: "12px 14px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: forgotConfirmPassword && forgotNewPassword !== forgotConfirmPassword ? "1px solid #FF4D4D" : "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowForgotConfirmPwd(!showForgotConfirmPwd)}
+                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
+                    >
+                      {showForgotConfirmPwd ? "💛" : "💔"}
+                    </button>
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    disabled={isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword}
+                    className="glow-text-yellow"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      background: isForgotLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      color: "#000",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      fontSize: "0.95rem",
+                      cursor: isForgotLoading ? "not-allowed" : "pointer",
+                      opacity: (forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword) ? 0.5 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isForgotLoading ? "Updating Password..." : "Set New Password"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForgotStep("request")}
+                    style={{
+                      padding: "12px 16px",
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.95rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Change Email Address Modal */}
+      {showChangeEmailModal && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px"
+          }}
+          onClick={() => setShowChangeEmailModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "rgba(18, 18, 20, 0.98)",
+              border: "1px solid var(--neon-yellow)",
+              borderRadius: "16px",
+              padding: "28px 24px",
+              maxWidth: "460px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 0 35px rgba(255, 234, 0, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              color: "#fff",
+              fontFamily: "var(--font-outfit)",
+              position: "relative"
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ fontSize: "1.3rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
+                  Change Email Address
+                </h2>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                  Verify your account credentials to update your registered email address.
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowChangeEmailModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  lineHeight: "1",
+                  padding: "0 4px"
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {changeEmailError && (
+              <p style={{ color: "#FF6B6B", fontSize: "0.85rem", margin: 0, background: "rgba(255,107,107,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,107,107,0.2)" }}>
+                {changeEmailError}
+              </p>
+            )}
+            {changeEmailMessage && (
+              <p style={{ color: "#00FF80", fontSize: "0.85rem", margin: 0, background: "rgba(0,255,128,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(0,255,128,0.2)" }}>
+                {changeEmailMessage}
+              </p>
+            )}
+
+            <form onSubmit={handleChangeEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                  Current Email or First Name
+                </label>
+                <input 
+                  type="text" 
+                  placeholder="Enter current email or first name" 
+                  value={changeCurrentIdentifier}
+                  onChange={(e) => setChangeCurrentIdentifier(e.target.value)}
+                  required
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                  Current Password
+                </label>
+                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                  <input 
+                    type={showChangeCurrentPwd ? "text" : "password"} 
+                    placeholder="Enter current password" 
+                    value={changeCurrentPassword}
+                    onChange={(e) => setChangeCurrentPassword(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
+                  <button 
+                    type="button"
+                    onClick={() => setShowChangeCurrentPwd(!showChangeCurrentPwd)}
+                    style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
+                  >
+                    {showChangeCurrentPwd ? "💛" : "💔"}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                  New Email Address
+                </label>
+                <input 
+                  type="email" 
+                  placeholder="newemail@example.com" 
+                  value={changeNewEmail}
+                  onChange={(e) => setChangeNewEmail(e.target.value)}
+                  required
+                  style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                <button
+                  type="submit"
+                  disabled={isChangeEmailLoading || !changeCurrentIdentifier.trim() || !changeCurrentPassword || !changeNewEmail.trim()}
+                  className="glow-text-yellow"
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    background: isChangeEmailLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                    color: "#000",
+                    border: "none",
+                    borderRadius: "8px",
+                    fontFamily: "var(--font-outfit)",
+                    fontWeight: "bold",
+                    fontSize: "0.95rem",
+                    cursor: isChangeEmailLoading ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "8px"
+                  }}
+                >
+                  {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                  {isChangeEmailLoading ? "Updating Email..." : "Update Email"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowChangeEmailModal(false)}
+                  style={{
+                    padding: "12px 18px",
+                    background: "transparent",
+                    color: "var(--text-muted)",
+                    border: "1px solid rgba(255,255,255,0.2)",
+                    borderRadius: "8px",
+                    fontFamily: "var(--font-outfit)",
+                    fontSize: "0.95rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
