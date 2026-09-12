@@ -1,9 +1,8 @@
 -- ==============================================================================
 -- HEARTIST ROW LEVEL SECURITY (RLS) HARDENING SCRIPT
--- Patakbuhin ito sa: Supabase Dashboard -> SQL Editor -> New Query -> Run
 -- ==============================================================================
 
--- 1. Helper Function: Check if the currently authenticated user is an Admin
+-- 1. Helper Function: Check if user is Admin
 CREATE OR REPLACE FUNCTION public.is_admin()
 RETURNS BOOLEAN AS $$
 DECLARE
@@ -15,12 +14,12 @@ BEGIN
     RETURN FALSE;
   END IF;
 
-  -- 1a. Primary hardcoded admin
+  -- 1a. Hardcoded primary admin
   IF lower(current_email) = 'heartistrichford@gmail.com' THEN
     RETURN TRUE;
   END IF;
 
-  -- 1b. Check admin_emails in system_settings
+  -- 1b. Check system_settings admin_emails
   SELECT value INTO admin_list FROM public.system_settings WHERE id = 'admin_emails';
   IF admin_list IS NOT NULL THEN
     IF jsonb_typeof(admin_list) = 'array' THEN
@@ -30,11 +29,11 @@ BEGIN
     END IF;
   END IF;
 
-  -- 1c. Check if user profile has Admin badge
+  -- 1c. Check profiles badge
   IF EXISTS (
     SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid() 
-    AND (lower(badge) = 'admin')
+    WHERE id::text = auth.uid()::text 
+    AND lower(badge) = 'admin'
   ) THEN
     RETURN TRUE;
   END IF;
@@ -43,9 +42,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
 
--- ------------------------------------------------------------------------------
 -- 2. SYSTEM SETTINGS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.system_settings ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Settings all" ON public.system_settings;
 DROP POLICY IF EXISTS "System settings read public" ON public.system_settings;
@@ -70,9 +67,7 @@ CREATE POLICY "System settings delete admin only"
   ON public.system_settings FOR DELETE 
   USING (public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 3. ANNOUNCEMENTS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.announcements ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Announcements all" ON public.announcements;
 DROP POLICY IF EXISTS "Announcements read public" ON public.announcements;
@@ -97,9 +92,7 @@ CREATE POLICY "Announcements delete admin only"
   ON public.announcements FOR DELETE 
   USING (public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 4. PROFILES
--- ------------------------------------------------------------------------------
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public profiles can be read by all" ON public.profiles;
 DROP POLICY IF EXISTS "Users can insert profile" ON public.profiles;
@@ -115,20 +108,18 @@ CREATE POLICY "Profiles read public"
 
 CREATE POLICY "Profiles insert own or admin" 
   ON public.profiles FOR INSERT 
-  WITH CHECK (auth.uid() = id OR public.is_admin());
+  WITH CHECK (auth.uid()::text = id::text OR public.is_admin());
 
 CREATE POLICY "Profiles update own or admin" 
   ON public.profiles FOR UPDATE 
-  USING (auth.uid() = id OR public.is_admin())
-  WITH CHECK (auth.uid() = id OR public.is_admin());
+  USING (auth.uid()::text = id::text OR public.is_admin())
+  WITH CHECK (auth.uid()::text = id::text OR public.is_admin());
 
 CREATE POLICY "Profiles delete admin only" 
   ON public.profiles FOR DELETE 
   USING (public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 5. POSTS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.posts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Posts select all" ON public.posts;
 DROP POLICY IF EXISTS "Posts insert all" ON public.posts;
@@ -145,21 +136,17 @@ CREATE POLICY "Posts read public"
 
 CREATE POLICY "Posts insert authenticated" 
   ON public.posts FOR INSERT 
-  WITH CHECK (auth.uid() = author_id OR public.is_admin());
+  WITH CHECK (auth.uid()::text = author_id::text OR public.is_admin());
 
--- Allows author to edit post, authenticated users to toggle likes, and admins to moderate
 CREATE POLICY "Posts update authorized" 
   ON public.posts FOR UPDATE 
   USING (auth.role() = 'authenticated');
 
--- Strictly prevents unauthorized deletion
 CREATE POLICY "Posts delete author or admin" 
   ON public.posts FOR DELETE 
-  USING (auth.uid() = author_id OR public.is_admin());
+  USING (auth.uid()::text = author_id::text OR public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 6. COMMENTS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.comments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Comments select all" ON public.comments;
 DROP POLICY IF EXISTS "Comments insert all" ON public.comments;
@@ -176,7 +163,7 @@ CREATE POLICY "Comments read public"
 
 CREATE POLICY "Comments insert authenticated" 
   ON public.comments FOR INSERT 
-  WITH CHECK (auth.uid() = author_id OR public.is_admin());
+  WITH CHECK (auth.uid()::text = author_id::text OR public.is_admin());
 
 CREATE POLICY "Comments update authorized" 
   ON public.comments FOR UPDATE 
@@ -184,11 +171,9 @@ CREATE POLICY "Comments update authorized"
 
 CREATE POLICY "Comments delete author or admin" 
   ON public.comments FOR DELETE 
-  USING (auth.uid() = author_id OR public.is_admin());
+  USING (auth.uid()::text = author_id::text OR public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 7. PRAYERS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.prayers ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Prayers select all" ON public.prayers;
 DROP POLICY IF EXISTS "Prayers insert all" ON public.prayers;
@@ -199,10 +184,9 @@ DROP POLICY IF EXISTS "Prayers insert authenticated" ON public.prayers;
 DROP POLICY IF EXISTS "Prayers update authorized" ON public.prayers;
 DROP POLICY IF EXISTS "Prayers delete author or admin" ON public.prayers;
 
--- Private prayers only visible to author or admin; public prayers visible to all
 CREATE POLICY "Prayers read public or private owner" 
   ON public.prayers FOR SELECT 
-  USING (NOT is_private OR auth.uid() = author_id OR public.is_admin());
+  USING (NOT is_private OR auth.uid()::text = author_id::text OR public.is_admin());
 
 CREATE POLICY "Prayers insert authenticated" 
   ON public.prayers FOR INSERT 
@@ -214,11 +198,9 @@ CREATE POLICY "Prayers update authorized"
 
 CREATE POLICY "Prayers delete author or admin" 
   ON public.prayers FOR DELETE 
-  USING (auth.uid() = author_id OR public.is_admin());
+  USING (auth.uid()::text = author_id::text OR public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 8. NOTIFICATIONS
--- ------------------------------------------------------------------------------
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Notifications all" ON public.notifications;
 DROP POLICY IF EXISTS "Notifications read recipient only" ON public.notifications;
@@ -228,7 +210,7 @@ DROP POLICY IF EXISTS "Notifications delete recipient only" ON public.notificati
 
 CREATE POLICY "Notifications read recipient only" 
   ON public.notifications FOR SELECT 
-  USING (auth.uid()::text = recipient_id OR public.is_admin());
+  USING (auth.uid()::text = recipient_id::text OR public.is_admin());
 
 CREATE POLICY "Notifications insert authenticated" 
   ON public.notifications FOR INSERT 
@@ -236,15 +218,13 @@ CREATE POLICY "Notifications insert authenticated"
 
 CREATE POLICY "Notifications update recipient only" 
   ON public.notifications FOR UPDATE 
-  USING (auth.uid()::text = recipient_id OR public.is_admin());
+  USING (auth.uid()::text = recipient_id::text OR public.is_admin());
 
 CREATE POLICY "Notifications delete recipient only" 
   ON public.notifications FOR DELETE 
-  USING (auth.uid()::text = recipient_id OR public.is_admin());
+  USING (auth.uid()::text = recipient_id::text OR public.is_admin());
 
--- ------------------------------------------------------------------------------
--- 9. MODERATION: REPORTS, APPEALS, PENALTIES, WARNINGS
--- ------------------------------------------------------------------------------
+-- 9. MODERATION (Reports, Appeals, Penalties, Warnings)
 ALTER TABLE public.reports ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Reports all" ON public.reports;
 DROP POLICY IF EXISTS "Reports insert any authenticated" ON public.reports;
@@ -278,11 +258,11 @@ DROP POLICY IF EXISTS "Appeals delete admin only" ON public.appeals;
 
 CREATE POLICY "Appeals select owner or admin" 
   ON public.appeals FOR SELECT 
-  USING (auth.uid()::text = user_id OR public.is_admin());
+  USING (auth.uid()::text = user_id::text OR public.is_admin());
 
 CREATE POLICY "Appeals insert owner" 
   ON public.appeals FOR INSERT 
-  WITH CHECK (auth.uid()::text = user_id OR public.is_admin());
+  WITH CHECK (auth.uid()::text = user_id::text OR public.is_admin());
 
 CREATE POLICY "Appeals update admin only" 
   ON public.appeals FOR UPDATE 
@@ -302,7 +282,7 @@ DROP POLICY IF EXISTS "Penalties delete admin only" ON public.penalties;
 
 CREATE POLICY "Penalties select user or admin" 
   ON public.penalties FOR SELECT 
-  USING (auth.uid()::text = user_id OR public.is_admin());
+  USING (auth.uid()::text = user_id::text OR public.is_admin());
 
 CREATE POLICY "Penalties write admin only" 
   ON public.penalties FOR INSERT 
@@ -326,7 +306,7 @@ DROP POLICY IF EXISTS "Warnings delete admin only" ON public.warnings;
 
 CREATE POLICY "Warnings select user or admin" 
   ON public.warnings FOR SELECT 
-  USING (auth.uid()::text = user_id OR public.is_admin());
+  USING (auth.uid()::text = user_id::text OR public.is_admin());
 
 CREATE POLICY "Warnings write admin only" 
   ON public.warnings FOR INSERT 
@@ -340,9 +320,7 @@ CREATE POLICY "Warnings delete admin only"
   ON public.warnings FOR DELETE 
   USING (public.is_admin());
 
--- ------------------------------------------------------------------------------
 -- 10. FORMS (Contact Us)
--- ------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.forms (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   type TEXT NOT NULL,
