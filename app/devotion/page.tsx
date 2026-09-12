@@ -724,8 +724,7 @@ export default function DevotionPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
-  const [editingDailyReflection, setEditingDailyReflection] = useState<string | null>(null);
-  const activeReflectionQuote = editingDailyReflection || dailyDevotion.reflection;
+  const [reflectionQuoteInput, setReflectionQuoteInput] = useState<string>("");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -768,7 +767,9 @@ export default function DevotionPage() {
     const diff = today.getTime() - start.getTime();
     const oneDay = 1000 * 60 * 60 * 24;
     const dayOfYear = Math.floor(diff / oneDay);
-    setDailyDevotion(DEVOTIONS[dayOfYear % DEVOTIONS.length]);
+    const todayDevotion = DEVOTIONS[dayOfYear % DEVOTIONS.length];
+    setDailyDevotion(todayDevotion);
+    setReflectionQuoteInput(todayDevotion.reflection);
 
     let devotionsChannel: any = null;
 
@@ -891,7 +892,7 @@ export default function DevotionPage() {
   const handleSave = async () => {
     if (!hasContent || !currentUser || isSaving) return;
 
-    const combinedText = buildCombinedText(selectedMethod, methodInputs, activeReflectionQuote);
+    const combinedText = buildCombinedText(selectedMethod, methodInputs, reflectionQuoteInput);
     if (!combinedText.trim()) return;
 
     setIsSaving(true);
@@ -920,7 +921,7 @@ export default function DevotionPage() {
       setSelectedMethod("default");
       setEditingDate(null);
       setEditingEntryId(null);
-      setEditingDailyReflection(null);
+      setReflectionQuoteInput(dailyDevotion.reflection);
       setTimeout(() => setIsSaved(false), 2500);
     }
     setIsSaving(false);
@@ -934,7 +935,7 @@ export default function DevotionPage() {
     setSelectedMethod(m);
 
     const { reflectionQuote, cleanText } = extractSavedReflection(entry.text);
-    setEditingDailyReflection(reflectionQuote);
+    setReflectionQuoteInput(reflectionQuote !== null ? reflectionQuote : dailyDevotion.reflection);
     setMethodInputs(parseEntryToInputs(cleanText, m));
 
     window.scrollTo({ top: 350, behavior: "smooth" });
@@ -946,7 +947,7 @@ export default function DevotionPage() {
     setJournalTitle("");
     setMethodInputs({});
     setSelectedMethod("default");
-    setEditingDailyReflection(null);
+    setReflectionQuoteInput(dailyDevotion.reflection);
   };
 
   const confirmDelete = async () => {
@@ -1386,7 +1387,7 @@ export default function DevotionPage() {
               Your Reflection / Prayer *
             </label>
             <div className="unified-journal-box">
-              {/* Fixed Daily Reflection Quote - permanently fixed and unmodifiable across all methods */}
+              {/* Editable Daily Reflection Quote */}
               <div style={{
                 marginBottom: "14px",
                 paddingBottom: "14px",
@@ -1394,30 +1395,89 @@ export default function DevotionPage() {
               }}>
                 <div style={{
                   display: "flex",
-                  alignItems: "baseline",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   gap: "8px",
                   flexWrap: "wrap",
-                  lineHeight: "1.6"
+                  marginBottom: "4px"
                 }}>
-                  <span style={{
-                    color: "var(--neon-yellow)",
-                    fontWeight: "bold",
-                    fontSize: "1rem",
-                    fontFamily: "var(--font-outfit)",
-                    userSelect: "none"
-                  }}>
-                    Reflection:
-                  </span>
-                  <span style={{
+                  <div 
+                    onClick={() => document.getElementById("devotion-input-quote")?.focus()}
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: "8px",
+                      cursor: "text"
+                    }}
+                  >
+                    <span style={{
+                      color: "var(--neon-yellow)",
+                      fontWeight: "bold",
+                      fontSize: "1rem",
+                      fontFamily: "var(--font-outfit)",
+                      userSelect: "none"
+                    }}>
+                      Reflection:
+                    </span>
+                    <span style={{
+                      color: "#888888",
+                      fontSize: "0.82rem",
+                      fontFamily: "var(--font-outfit)",
+                      fontStyle: "italic",
+                      userSelect: "none"
+                    }}>
+                      (editable quote / theme)
+                    </span>
+                  </div>
+
+                  {reflectionQuoteInput !== dailyDevotion.reflection && (
+                    <button
+                      type="button"
+                      onClick={() => setReflectionQuoteInput(dailyDevotion.reflection)}
+                      style={{
+                        background: "none",
+                        border: "1px solid rgba(255, 255, 255, 0.2)",
+                        borderRadius: "12px",
+                        color: "var(--text-muted)",
+                        fontSize: "0.75rem",
+                        padding: "2px 8px",
+                        cursor: "pointer",
+                        transition: "all 0.2s"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = "var(--neon-yellow)";
+                        e.currentTarget.style.borderColor = "var(--neon-yellow)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = "var(--text-muted)";
+                        e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.2)";
+                      }}
+                    >
+                      Reset to default quote
+                    </button>
+                  )}
+                </div>
+
+                <textarea
+                  id="devotion-input-quote"
+                  className="seamless-devotion-input"
+                  value={reflectionQuoteInput}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setReflectionQuoteInput(val);
+                    e.target.style.height = "auto";
+                    e.target.style.height = Math.max(40, e.target.scrollHeight) + "px";
+                  }}
+                  placeholder="(Enter today's reflection quote or theme...)"
+                  rows={2}
+                  style={{
+                    minHeight: "40px",
+                    fontStyle: "italic",
                     color: "var(--neon-white)",
                     fontSize: "0.95rem",
-                    fontFamily: "var(--font-outfit)",
-                    fontStyle: "italic",
-                    userSelect: "none"
-                  }}>
-                    &ldquo;{activeReflectionQuote}&rdquo;
-                  </span>
-                </div>
+                    lineHeight: "1.6"
+                  }}
+                />
               </div>
 
               {activeMethodObj.value === "default" ? (

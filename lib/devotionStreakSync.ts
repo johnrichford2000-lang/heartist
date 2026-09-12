@@ -282,6 +282,30 @@ export function evaluateTestStreak(
   const currentYear = new Date().getFullYear();
   const yearlyCount = calculateYearlyDevotions(history, currentYear);
 
+  if (history.length === 0) {
+    const { restoresRemaining, maxRestores } = resolveRestores(0, storedStreak);
+    return {
+      currentStreak: 0,
+      lastDevotionDate: "",
+      lastEvaluatedDate: getLocalDateString(),
+      completedToday: false,
+      isBroken: false,
+      isRestoredToday: false,
+      monthlyCount: 0,
+      currentMonthName,
+      yearlyCount: 0,
+      currentYear,
+      restoresRemaining,
+      maxRestores,
+      testMode: {
+        active: true,
+        lastSavedTimestamp: 0,
+        baseStreak: 0,
+        isRestored: false
+      }
+    };
+  }
+
   if (!storedStreak?.testMode || !storedStreak.testMode.lastSavedTimestamp) {
     const s = storedStreak?.currentStreak || 0;
     const { restoresRemaining, maxRestores } = resolveRestores(s, storedStreak);
@@ -363,6 +387,32 @@ export function evaluateTestStreak(
     const penalizedStreak = Math.max(0, baseStreak - missedMinutes);
     const { restoresRemaining, maxRestores } = resolveRestores(penalizedStreak, storedStreak);
 
+    // If streak reached 0 and 2+ minutes missed, restore window expired
+    if (penalizedStreak === 0 && (missedMinutes >= 2 || baseStreak === 0)) {
+      return {
+        currentStreak: 0,
+        lastDevotionDate: getLocalDateString(),
+        lastEvaluatedDate: getLocalDateString(),
+        completedToday: false,
+        isBroken: false,
+        missedDays: 0,
+        isRestoredToday: false,
+        monthlyCount,
+        currentMonthName,
+        yearlyCount,
+        currentYear,
+        restoresRemaining,
+        maxRestores,
+        testMode: {
+          active: true,
+          lastSavedTimestamp,
+          baseStreak: 0,
+          isRestored: false,
+          missedMinutes: 0
+        }
+      };
+    }
+
     return {
       currentStreak: penalizedStreak,
       lastDevotionDate: getLocalDateString(),
@@ -428,6 +478,29 @@ export function evaluateStreak(
   }).filter(Boolean))).sort();
 
   const latestHistoryDate = historyDates.length > 0 ? historyDates[historyDates.length - 1] : "";
+
+  // Brand new user or user who has never saved/completed a devotion:
+  // Streak is 0 and heart should remain neutral gray (NEVER broken).
+  // The 24-hour cycle and streak evaluation only activate once the user submits their first devotion.
+  if (history.length === 0 || historyDates.length === 0) {
+    const { restoresRemaining, maxRestores } = resolveRestores(0, storedStreak);
+    return {
+      currentStreak: 0,
+      lastDevotionDate: "",
+      lastEvaluatedDate: todayStr,
+      completedToday: false,
+      isBroken: false,
+      missedDays: 0,
+      isRestoredToday: false,
+      monthlyCount: 0,
+      currentMonthName,
+      yearlyCount: 0,
+      currentYear,
+      restoresRemaining,
+      maxRestores,
+      testMode: { active: false, lastSavedTimestamp: 0, baseStreak: 0 }
+    };
+  }
 
   // If no stored streak exists yet, initialize or infer from history
   if (!storedStreak) {
@@ -629,6 +702,28 @@ export function evaluateStreak(
   const penalizedStreak = Math.max(0, storedStreak.currentStreak - missedDays);
   const { restoresRemaining, maxRestores } = resolveRestores(penalizedStreak, storedStreak);
 
+  // If streak reached 0 AND 2 or more days were missed (or streak was already at 0):
+  // The restore window has passed. The system reads that devotion was abandoned.
+  // Do NOT keep heart broken, do NOT offer restore. Streak remains at 0, ready to start fresh without wasting a restore.
+  if (penalizedStreak === 0 && (missedDays >= 2 || storedStreak.currentStreak === 0)) {
+    return {
+      currentStreak: 0,
+      lastDevotionDate: effectiveLastDate,
+      lastEvaluatedDate: todayStr,
+      completedToday: false,
+      isBroken: false,
+      missedDays: 0,
+      isRestoredToday: false,
+      monthlyCount,
+      currentMonthName,
+      yearlyCount,
+      currentYear,
+      restoresRemaining,
+      maxRestores,
+      testMode: testModeObj
+    };
+  }
+
   return {
     currentStreak: penalizedStreak,
     lastDevotionDate: effectiveLastDate,
@@ -744,16 +839,21 @@ export async function recordDevotionSaved(
 
     // If broken: use up to missedDays/missedMinutes worth of restores
     if (currentStreakData.isBroken) {
-      const daysMissed = Math.max(1, currentStreakData.missedDays || 1);
-      const restoresToUse = Math.min(daysMissed, baseRemaining);
-
-      if (restoresToUse > 0) {
-        baseRemaining = Math.max(0, baseRemaining - restoresToUse);
-        nextStreak = currentStreakData.currentStreak + restoresToUse + 1;
-        wasRestored = true;
-      } else {
-        nextStreak = currentStreakData.currentStreak + 1;
+      if (currentStreakData.currentStreak === 0 && (currentStreakData.missedDays || 1) >= 2) {
+        nextStreak = 1;
         wasRestored = false;
+      } else {
+        const daysMissed = Math.max(1, currentStreakData.missedDays || 1);
+        const restoresToUse = Math.min(daysMissed, baseRemaining);
+
+        if (restoresToUse > 0) {
+          baseRemaining = Math.max(0, baseRemaining - restoresToUse);
+          nextStreak = currentStreakData.currentStreak + restoresToUse + 1;
+          wasRestored = true;
+        } else {
+          nextStreak = currentStreakData.currentStreak + 1;
+          wasRestored = false;
+        }
       }
     }
 
@@ -818,16 +918,21 @@ export async function recordDevotionSaved(
   // Restores consumed: 2 (restores become 2 - 2 = 0).
   // Streak becomes: 19 + 2 (restores) + 1 (today) = 22 days!
   if (currentStreakData.isBroken) {
-    const daysMissed = Math.max(1, currentStreakData.missedDays || 1);
-    const restoresToUse = Math.min(daysMissed, baseRemaining);
-
-    if (restoresToUse > 0) {
-      baseRemaining = Math.max(0, baseRemaining - restoresToUse);
-      nextStreak = currentStreakData.currentStreak + restoresToUse + 1; // restores recovered + today's devotion (+1)
-      wasRestoredToday = true;
-    } else {
-      nextStreak = currentStreakData.currentStreak + 1; // only today's devotion (+1)
+    if (currentStreakData.currentStreak === 0 && (currentStreakData.missedDays || 1) >= 2) {
+      nextStreak = 1;
       wasRestoredToday = false;
+    } else {
+      const daysMissed = Math.max(1, currentStreakData.missedDays || 1);
+      const restoresToUse = Math.min(daysMissed, baseRemaining);
+
+      if (restoresToUse > 0) {
+        baseRemaining = Math.max(0, baseRemaining - restoresToUse);
+        nextStreak = currentStreakData.currentStreak + restoresToUse + 1; // restores recovered + today's devotion (+1)
+        wasRestoredToday = true;
+      } else {
+        nextStreak = currentStreakData.currentStreak + 1; // only today's devotion (+1)
+        wasRestoredToday = false;
+      }
     }
   }
 
@@ -877,7 +982,7 @@ export async function restoreUserStreak(
   history: DevotionEntry[] = []
 ): Promise<DevotionStreakData | null> {
   const current = await fetchUserStreak(userId, history);
-  if (!current.isBroken || current.restoresRemaining <= 0) {
+  if (!current.isBroken || current.restoresRemaining <= 0 || (current.currentStreak === 0 && (current.missedDays || 1) >= 2)) {
     return null;
   }
 
