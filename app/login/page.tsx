@@ -59,16 +59,24 @@ export default function LoginPage() {
   const [isForgotLoading, setIsForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState("");
   const [forgotMessage, setForgotMessage] = useState("");
+  const [forgotCodeExpiry, setForgotCodeExpiry] = useState(120);
+  const [forgotResendCooldown, setForgotResendCooldown] = useState(60);
+  const [isForgotResending, setIsForgotResending] = useState(false);
 
   // Change Email Address modal state
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
+  const [changeEmailStep, setChangeEmailStep] = useState<"request" | "verify">("request");
   const [changeCurrentIdentifier, setChangeCurrentIdentifier] = useState("");
   const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
   const [changeNewEmail, setChangeNewEmail] = useState("");
+  const [changeEmailCode, setChangeEmailCode] = useState("");
   const [showChangeCurrentPwd, setShowChangeCurrentPwd] = useState(false);
   const [isChangeEmailLoading, setIsChangeEmailLoading] = useState(false);
   const [changeEmailError, setChangeEmailError] = useState("");
   const [changeEmailMessage, setChangeEmailMessage] = useState("");
+  const [changeEmailCodeExpiry, setChangeEmailCodeExpiry] = useState(120);
+  const [changeEmailResendCooldown, setChangeEmailResendCooldown] = useState(60);
+  const [isChangeEmailResending, setIsChangeEmailResending] = useState(false);
 
   // Verification timers (2-minute code expiration, 1-minute resend cooldown)
   const [codeExpiry, setCodeExpiry] = useState(120);
@@ -87,6 +95,32 @@ export default function LoginPage() {
       if (timer) clearInterval(timer);
     };
   }, [activeTab]);
+
+  useEffect(() => {
+    let timer: any = null;
+    if (showForgotPwdModal && forgotStep === "verify") {
+      timer = setInterval(() => {
+        setForgotCodeExpiry((prev) => (prev > 0 ? prev - 1 : 0));
+        setForgotResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showForgotPwdModal, forgotStep]);
+
+  useEffect(() => {
+    let timer: any = null;
+    if (showChangeEmailModal && changeEmailStep === "verify") {
+      timer = setInterval(() => {
+        setChangeEmailCodeExpiry((prev) => (prev > 0 ? prev - 1 : 0));
+        setChangeEmailResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showChangeEmailModal, changeEmailStep]);
 
   useEffect(() => {
     const saved = localStorage.getItem("registeredAccounts");
@@ -562,7 +596,10 @@ export default function LoginPage() {
       if (resetError) throw resetError;
 
       setForgotStep("verify");
-      setForgotMessage("A 6-digit password reset code has been sent to your email. Please enter it below along with your new password.");
+      setForgotCodeExpiry(120);
+      setForgotResendCooldown(60);
+      setForgotCode("");
+      setForgotMessage("A 6-digit password reset OTP code has been sent to your email. Please enter it below.");
     } catch (err: any) {
       setForgotError(err.message || "Failed to send reset code. Please verify the email and try again.");
     } finally {
@@ -570,15 +607,41 @@ export default function LoginPage() {
     }
   };
 
+  const handleResendForgotOtp = async () => {
+    if (forgotResendCooldown > 0 || isForgotResending) return;
+    setIsForgotResending(true);
+    setForgotError("");
+    setForgotMessage("");
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim());
+      if (resetError) throw resetError;
+      setForgotMessage("A new 6-digit OTP code has been sent to your email.");
+      setForgotCodeExpiry(120);
+      setForgotResendCooldown(60);
+      setForgotCode("");
+    } catch (err: any) {
+      const msg = err.message || "Failed to resend code. Please try again.";
+      if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
+        setForgotError("Email rate limit reached. Please wait a few minutes before requesting another code.");
+      } else {
+        setForgotError(msg);
+      }
+    } finally {
+      setIsForgotResending(false);
+    }
+  };
+
   const handleVerifyAndSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isForgotLoading) return;
-    setForgotError("");
-    setForgotMessage("");
+    if (forgotCodeExpiry === 0) {
+      setForgotError("The OTP code has expired. Please request a new code.");
+      return;
+    }
 
     const code = forgotCode.trim();
     if (!code || code.length !== 6) {
-      setForgotError("Please enter the 6-digit code sent to your email.");
+      setForgotError("Please enter the 6-digit OTP code.");
       return;
     }
 
@@ -593,6 +656,7 @@ export default function LoginPage() {
     }
 
     setIsForgotLoading(true);
+    setForgotError("");
     try {
       // 1. Verify OTP token for recovery
       const { data: verifyData, error: verifyError } = await supabase.auth.verifyOtp({
@@ -617,18 +681,19 @@ export default function LoginPage() {
       localStorage.removeItem("isAdminLoggedIn");
 
       setShowForgotPwdModal(false);
+      setForgotStep("request");
       setLoginIdentifier(forgotEmail.trim());
       setLoginPassword("");
-      setMessage("Password successfully reset! Please log in with your new password.");
+      setMessage("Password successfully reset with OTP! Please log in with your new password.");
       setError("");
     } catch (err: any) {
-      setForgotError(err.message || "Invalid or expired reset code. Please try requesting a new one.");
+      setForgotError(err.message || "Invalid or expired OTP code. Please try requesting a new one.");
     } finally {
       setIsForgotLoading(false);
     }
   };
 
-  const handleChangeEmail = async (e: React.FormEvent) => {
+  const handleRequestChangeEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isChangeEmailLoading) return;
     setChangeEmailError("");
@@ -685,7 +750,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Authenticate with current credentials
+      // Authenticate with current credentials to ensure permission
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: emailToAuthenticate,
         password: currentPwd
@@ -696,36 +761,101 @@ export default function LoginPage() {
         return;
       }
 
-      const userId = authData.user.id;
-
-      // Update email in Supabase Auth
+      // Trigger Supabase to send OTP verification code to new email
       const { error: updateAuthError } = await supabase.auth.updateUser({
         email: newEmail
       });
 
       if (updateAuthError) throw updateAuthError;
 
-      // Update email in PostgreSQL profiles table
-      const { error: updateProfileError } = await supabase
-        .from("profiles")
-        .update({ email: newEmail })
-        .eq("id", userId);
+      setChangeEmailStep("verify");
+      setChangeEmailCodeExpiry(120);
+      setChangeEmailResendCooldown(60);
+      setChangeEmailCode("");
+      setChangeEmailMessage(`A 6-digit OTP verification code has been sent to ${newEmail}. Please enter it below to confirm.`);
+    } catch (err: any) {
+      setChangeEmailError(err.message || "Failed to initiate email change. Please check credentials and try again.");
+    } finally {
+      setIsChangeEmailLoading(false);
+    }
+  };
 
-      if (updateProfileError) throw updateProfileError;
+  const handleResendChangeEmailOtp = async () => {
+    if (changeEmailResendCooldown > 0 || isChangeEmailResending) return;
+    setIsChangeEmailResending(true);
+    setChangeEmailError("");
+    setChangeEmailMessage("");
+    try {
+      const { error: resendError } = await supabase.auth.updateUser({
+        email: changeNewEmail.trim()
+      });
+      if (resendError) throw resendError;
+      setChangeEmailMessage(`A new 6-digit OTP code has been sent to ${changeNewEmail.trim()}.`);
+      setChangeEmailCodeExpiry(120);
+      setChangeEmailResendCooldown(60);
+      setChangeEmailCode("");
+    } catch (err: any) {
+      const msg = err.message || "Failed to resend code. Please try again.";
+      if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
+        setChangeEmailError("Email rate limit reached. Please wait a few minutes before requesting another code.");
+      } else {
+        setChangeEmailError(msg);
+      }
+    } finally {
+      setIsChangeEmailResending(false);
+    }
+  };
 
-      // Sign out to enforce clean login with new email
+  const handleVerifyAndConfirmEmailChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isChangeEmailLoading) return;
+    if (changeEmailCodeExpiry === 0) {
+      setChangeEmailError("The OTP code has expired. Please request a new code.");
+      return;
+    }
+
+    const code = changeEmailCode.trim();
+    if (!code || code.length !== 6) {
+      setChangeEmailError("Please enter the 6-digit OTP code.");
+      return;
+    }
+
+    setIsChangeEmailLoading(true);
+    setChangeEmailError("");
+    try {
+      const newEmail = changeNewEmail.trim();
+
+      // 1. Verify OTP with Supabase Auth for email_change
+      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: newEmail,
+        token: code,
+        type: "email_change"
+      });
+
+      if (verifyError) throw verifyError;
+
+      // 2. Update email in PostgreSQL profiles table
+      if (data.user) {
+        await supabase
+          .from("profiles")
+          .update({ email: newEmail })
+          .eq("id", data.user.id);
+      }
+
+      // 3. Sign out cleanly
       await supabase.auth.signOut();
       localStorage.removeItem("isHeartistLoggedIn");
       localStorage.removeItem("activeUser");
       localStorage.removeItem("isAdminLoggedIn");
 
       setShowChangeEmailModal(false);
+      setChangeEmailStep("request");
       setLoginIdentifier(newEmail);
       setLoginPassword("");
-      setMessage("Email address updated successfully! Please log in using your new email.");
+      setMessage("Email address successfully verified & updated with OTP! Please log in with your new email.");
       setError("");
     } catch (err: any) {
-      setChangeEmailError(err.message || "Failed to update email address. Please try again.");
+      setChangeEmailError(err.message || "Invalid or expired OTP code. Please check the code and try again.");
     } finally {
       setIsChangeEmailLoading(false);
     }
@@ -1772,12 +1902,12 @@ export default function LoginPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <h2 style={{ fontSize: "1.3rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
-                  Reset Password
+                  Reset Password (OTP)
                 </h2>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
                   {forgotStep === "request" 
-                    ? "Enter your registered email to receive a 6-digit reset code."
-                    : "Enter the reset code sent to your email and choose a new password."}
+                    ? "Enter your registered email to receive a 6-digit OTP code."
+                    : "Enter the OTP code and set your new password."}
                 </p>
               </div>
               <button 
@@ -1848,7 +1978,7 @@ export default function LoginPage() {
                     }}
                   >
                     {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                    {isForgotLoading ? "Sending Code..." : "Send Reset Code"}
+                    {isForgotLoading ? "Sending OTP..." : "Send OTP Code"}
                   </button>
                   <button
                     type="button"
@@ -1870,19 +2000,103 @@ export default function LoginPage() {
               </form>
             ) : (
               <form onSubmit={handleVerifyAndSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {/* OTP Info Box with Timer */}
+                <div style={{
+                  background: "rgba(255, 234, 0, 0.04)",
+                  border: "1px solid rgba(255, 234, 0, 0.15)",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: "bold" }}>
+                      OTP Code Sent
+                    </span>
+                    <span style={{
+                      fontSize: "0.78rem",
+                      color: forgotCodeExpiry === 0 ? "#FF6B6B" : forgotCodeExpiry <= 30 ? "#FFA500" : "var(--neon-yellow)",
+                      fontFamily: "monospace, var(--font-outfit)",
+                      fontWeight: "bold",
+                      background: "rgba(0, 0, 0, 0.4)",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      border: forgotCodeExpiry === 0 ? "1px solid rgba(255, 107, 107, 0.4)" : "1px solid rgba(255, 234, 0, 0.3)"
+                    }}>
+                      {forgotCodeExpiry > 0 
+                        ? `Expires: ${Math.floor(forgotCodeExpiry / 60).toString().padStart(2, "0")}:${(forgotCodeExpiry % 60).toString().padStart(2, "0")}`
+                        : "Expired"}
+                    </span>
+                  </div>
+                  <p style={{ color: "#fff", fontSize: "0.9rem", margin: 0, fontWeight: "bold", wordBreak: "break-all" }}>
+                    {forgotEmail}
+                  </p>
+                </div>
+
+                {/* 6-Digit OTP input */}
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    6-Digit Reset Code
+                    Enter 6-Digit OTP Code
                   </label>
                   <input 
                     type="text" 
-                    placeholder="123456" 
+                    inputMode="numeric"
+                    placeholder="000000" 
                     maxLength={6}
                     value={forgotCode}
                     onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
                     required
-                    style={{ width: "100%", padding: "12px 14px", textAlign: "center", letterSpacing: "4px", fontWeight: "bold", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid var(--neon-yellow)", color: "var(--neon-yellow)", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1.2rem" }}
+                    style={{ 
+                      width: "100%", 
+                      padding: "12px 14px", 
+                      textAlign: "center", 
+                      letterSpacing: "10px", 
+                      fontFamily: "monospace, var(--font-outfit)", 
+                      fontWeight: "bold", 
+                      borderRadius: "8px", 
+                      background: "rgba(0,0,0,0.5)", 
+                      border: forgotCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
+                      color: "var(--neon-yellow)", 
+                      outline: "none", 
+                      fontSize: "1.6rem",
+                      boxShadow: forgotCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
+                    }}
                   />
+                </div>
+
+                {/* Resend Action Box */}
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px"
+                }}>
+                  <span style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                    Didn&apos;t get the code?
+                  </span>
+                  <button
+                    type="button"
+                    disabled={forgotResendCooldown > 0 || isForgotResending}
+                    onClick={handleResendForgotOtp}
+                    style={{
+                      background: forgotResendCooldown > 0 || isForgotResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
+                      border: forgotResendCooldown > 0 || isForgotResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
+                      borderRadius: "6px",
+                      padding: "5px 10px",
+                      color: forgotResendCooldown > 0 || isForgotResending ? "var(--text-muted)" : "var(--neon-yellow)",
+                      fontSize: "0.78rem",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      cursor: forgotResendCooldown > 0 || isForgotResending ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    {isForgotResending ? "Sending..." : forgotResendCooldown > 0 ? `Resend in ${forgotResendCooldown}s` : "Resend Code"}
+                  </button>
                 </div>
 
                 <div>
@@ -1934,7 +2148,7 @@ export default function LoginPage() {
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword}
+                    disabled={isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
@@ -1946,8 +2160,8 @@ export default function LoginPage() {
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
                       fontSize: "0.95rem",
-                      cursor: isForgotLoading ? "not-allowed" : "pointer",
-                      opacity: (forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword) ? 0.5 : 1,
+                      cursor: (isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? "not-allowed" : "pointer",
+                      opacity: (forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? 0.5 : 1,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -1955,7 +2169,7 @@ export default function LoginPage() {
                     }}
                   >
                     {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                    {isForgotLoading ? "Updating Password..." : "Set New Password"}
+                    {isForgotLoading ? "Verifying..." : "Verify OTP & Set Password"}
                   </button>
                   <button
                     type="button"
@@ -1980,7 +2194,7 @@ export default function LoginPage() {
         </div>
       )}
 
-      {/* Change Email Address Modal */}
+      {/* Change Email Address Modal with OTP */}
       {showChangeEmailModal && (
         <div 
           style={{
@@ -2023,10 +2237,12 @@ export default function LoginPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <h2 style={{ fontSize: "1.3rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
-                  Change Email Address
+                  Change Email Address (OTP)
                 </h2>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                  Verify your account credentials to update your registered email address.
+                  {changeEmailStep === "request"
+                    ? "Verify your account credentials to send an OTP to your new email."
+                    : "Enter the 6-digit OTP code sent to your new email address."}
                 </p>
               </div>
               <button 
@@ -2058,101 +2274,248 @@ export default function LoginPage() {
               </p>
             )}
 
-            <form onSubmit={handleChangeEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-              <div>
-                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                  Current Email or First Name
-                </label>
-                <input 
-                  type="text" 
-                  placeholder="Enter current email or first name" 
-                  value={changeCurrentIdentifier}
-                  onChange={(e) => setChangeCurrentIdentifier(e.target.value)}
-                  required
-                  style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                  Current Password
-                </label>
-                <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+            {changeEmailStep === "request" ? (
+              <form onSubmit={handleRequestChangeEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    Current Email or First Name
+                  </label>
                   <input 
-                    type={showChangeCurrentPwd ? "text" : "password"} 
-                    placeholder="Enter current password" 
-                    value={changeCurrentPassword}
-                    onChange={(e) => setChangeCurrentPassword(e.target.value)}
+                    type="text" 
+                    placeholder="Enter current email or first name" 
+                    value={changeCurrentIdentifier}
+                    onChange={(e) => setChangeCurrentIdentifier(e.target.value)}
                     required
-                    style={{ width: "100%", padding: "12px 14px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
                   />
-                  <button 
-                    type="button"
-                    onClick={() => setShowChangeCurrentPwd(!showChangeCurrentPwd)}
-                    style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    Current Password
+                  </label>
+                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+                    <input 
+                      type={showChangeCurrentPwd ? "text" : "password"} 
+                      placeholder="Enter current password" 
+                      value={changeCurrentPassword}
+                      onChange={(e) => setChangeCurrentPassword(e.target.value)}
+                      required
+                      style={{ width: "100%", padding: "12px 14px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    />
+                    <button 
+                      type="button"
+                      onClick={() => setShowChangeCurrentPwd(!showChangeCurrentPwd)}
+                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
+                    >
+                      {showChangeCurrentPwd ? "💛" : "💔"}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    New Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    placeholder="newemail@example.com" 
+                    value={changeNewEmail}
+                    onChange={(e) => setChangeNewEmail(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    disabled={isChangeEmailLoading || !changeCurrentIdentifier.trim() || !changeCurrentPassword || !changeNewEmail.trim()}
+                    className="glow-text-yellow"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      background: isChangeEmailLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      color: "#000",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      fontSize: "0.95rem",
+                      cursor: isChangeEmailLoading ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px"
+                    }}
                   >
-                    {showChangeCurrentPwd ? "💛" : "💔"}
+                    {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isChangeEmailLoading ? "Verifying..." : "Send OTP to New Email"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowChangeEmailModal(false)}
+                    style={{
+                      padding: "12px 18px",
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.95rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Cancel
                   </button>
                 </div>
-              </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyAndConfirmEmailChange} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {/* OTP Info Box with Timer */}
+                <div style={{
+                  background: "rgba(255, 234, 0, 0.04)",
+                  border: "1px solid rgba(255, 234, 0, 0.15)",
+                  borderRadius: "10px",
+                  padding: "12px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px"
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                    <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1px", fontWeight: "bold" }}>
+                      OTP Code Sent to New Email
+                    </span>
+                    <span style={{
+                      fontSize: "0.78rem",
+                      color: changeEmailCodeExpiry === 0 ? "#FF6B6B" : changeEmailCodeExpiry <= 30 ? "#FFA500" : "var(--neon-yellow)",
+                      fontFamily: "monospace, var(--font-outfit)",
+                      fontWeight: "bold",
+                      background: "rgba(0, 0, 0, 0.4)",
+                      padding: "2px 8px",
+                      borderRadius: "4px",
+                      border: changeEmailCodeExpiry === 0 ? "1px solid rgba(255, 107, 107, 0.4)" : "1px solid rgba(255, 234, 0, 0.3)"
+                    }}>
+                      {changeEmailCodeExpiry > 0 
+                        ? `Expires: ${Math.floor(changeEmailCodeExpiry / 60).toString().padStart(2, "0")}:${(changeEmailCodeExpiry % 60).toString().padStart(2, "0")}`
+                        : "Expired"}
+                    </span>
+                  </div>
+                  <p style={{ color: "#fff", fontSize: "0.9rem", margin: 0, fontWeight: "bold", wordBreak: "break-all" }}>
+                    {changeNewEmail}
+                  </p>
+                </div>
 
-              <div>
-                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                  New Email Address
-                </label>
-                <input 
-                  type="email" 
-                  placeholder="newemail@example.com" 
-                  value={changeNewEmail}
-                  onChange={(e) => setChangeNewEmail(e.target.value)}
-                  required
-                  style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                />
-              </div>
+                {/* 6-Digit OTP input */}
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    Enter 6-Digit OTP Code
+                  </label>
+                  <input 
+                    type="text" 
+                    inputMode="numeric"
+                    placeholder="000000" 
+                    maxLength={6}
+                    value={changeEmailCode}
+                    onChange={(e) => setChangeEmailCode(e.target.value.replace(/\D/g, ""))}
+                    required
+                    style={{ 
+                      width: "100%", 
+                      padding: "12px 14px", 
+                      textAlign: "center", 
+                      letterSpacing: "10px", 
+                      fontFamily: "monospace, var(--font-outfit)", 
+                      fontWeight: "bold", 
+                      borderRadius: "8px", 
+                      background: "rgba(0,0,0,0.5)", 
+                      border: changeEmailCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
+                      color: "var(--neon-yellow)", 
+                      outline: "none", 
+                      fontSize: "1.6rem",
+                      boxShadow: changeEmailCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
+                    }}
+                  />
+                </div>
 
-              <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
-                <button
-                  type="submit"
-                  disabled={isChangeEmailLoading || !changeCurrentIdentifier.trim() || !changeCurrentPassword || !changeNewEmail.trim()}
-                  className="glow-text-yellow"
-                  style={{
-                    flex: 1,
-                    padding: "12px",
-                    background: isChangeEmailLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
-                    color: "#000",
-                    border: "none",
-                    borderRadius: "8px",
-                    fontFamily: "var(--font-outfit)",
-                    fontWeight: "bold",
-                    fontSize: "0.95rem",
-                    cursor: isChangeEmailLoading ? "not-allowed" : "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px"
-                  }}
-                >
-                  {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                  {isChangeEmailLoading ? "Updating Email..." : "Update Email"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowChangeEmailModal(false)}
-                  style={{
-                    padding: "12px 18px",
-                    background: "transparent",
-                    color: "var(--text-muted)",
-                    border: "1px solid rgba(255,255,255,0.2)",
-                    borderRadius: "8px",
-                    fontFamily: "var(--font-outfit)",
-                    fontSize: "0.95rem",
-                    cursor: "pointer"
-                  }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                {/* Resend Action Box */}
+                <div style={{
+                  background: "rgba(255, 255, 255, 0.03)",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "10px"
+                }}>
+                  <span style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                    Didn&apos;t get the code?
+                  </span>
+                  <button
+                    type="button"
+                    disabled={changeEmailResendCooldown > 0 || isChangeEmailResending}
+                    onClick={handleResendChangeEmailOtp}
+                    style={{
+                      background: changeEmailResendCooldown > 0 || isChangeEmailResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
+                      border: changeEmailResendCooldown > 0 || isChangeEmailResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
+                      borderRadius: "6px",
+                      padding: "5px 10px",
+                      color: changeEmailResendCooldown > 0 || isChangeEmailResending ? "var(--text-muted)" : "var(--neon-yellow)",
+                      fontSize: "0.78rem",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      cursor: changeEmailResendCooldown > 0 || isChangeEmailResending ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    {isChangeEmailResending ? "Sending..." : changeEmailResendCooldown > 0 ? `Resend in ${changeEmailResendCooldown}s` : "Resend Code"}
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    disabled={isChangeEmailLoading || changeEmailCode.length !== 6 || changeEmailCodeExpiry === 0}
+                    className="glow-text-yellow"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      background: isChangeEmailLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      color: "#000",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      fontSize: "0.95rem",
+                      cursor: (isChangeEmailLoading || changeEmailCode.length !== 6 || changeEmailCodeExpiry === 0) ? "not-allowed" : "pointer",
+                      opacity: (changeEmailCode.length !== 6 || changeEmailCodeExpiry === 0) ? 0.5 : 1,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isChangeEmailLoading ? "Verifying..." : "Verify OTP & Update Email"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setChangeEmailStep("request")}
+                    style={{
+                      padding: "12px 16px",
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.95rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            )}
           </div>
         </div>
       )}
