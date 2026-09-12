@@ -14,10 +14,32 @@ const ROLES = [
   { id: "supporter", title: "Supporter", emoji: "💖", label: "Supporter 💖" },
 ];
 
+export function calculateAge(birthDateString: string): number {
+  if (!birthDateString) return 0;
+  const birth = new Date(birthDateString);
+  if (isNaN(birth.getTime())) return 0;
+  const today = new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+    age--;
+  }
+  return Math.max(0, age);
+}
+
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"login" | "register" | "verify">("login");
   const [accounts, setAccounts] = useState<any[]>([]);
   const [verificationCode, setVerificationCode] = useState("");
+
+  // Loading states
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // Guidelines & Terms of Service
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("registeredAccounts");
@@ -118,7 +140,7 @@ export default function LoginPage() {
         first_name: isAdmin ? "Admin" : (meta.first_name || ""),
         last_name: isAdmin ? "" : (meta.last_name || ""),
         email: user.email || "",
-        age: isAdmin ? "" : (meta.age || ""),
+        age: isAdmin ? "" : (meta.age || (meta.birth_date ? String(calculateAge(meta.birth_date)) : "")),
         birth_date: isAdmin ? null : (meta.birth_date || null),
         contact_number: isAdmin ? "" : (meta.contact_number || ""),
         badge: isAdmin ? "Admin" : (meta.badge || "first-timer"),
@@ -195,6 +217,9 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
+    setError("");
     
     try {
       let emailToUse = loginIdentifier.trim();
@@ -227,11 +252,15 @@ export default function LoginPage() {
       }
     } catch (err: any) {
       setError(err.message || "Account not found or incorrect password.");
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isRegistering) return;
+    setError("");
     
     if (!regFirstName.trim() || !regLastName.trim() || !regBirthDate || !regEmail.trim() || !regContact.trim() || !regPassword || !regConfirmPassword) {
       setError("Please fill in all required fields.");
@@ -259,6 +288,12 @@ export default function LoginPage() {
       return;
     }
 
+    if (!agreeToTerms) {
+      setError("Please agree to the Terms of Service & Community Guidelines to continue.");
+      return;
+    }
+
+    setIsRegistering(true);
     try {
       let adminEmails = await fetchSystemSetting("admin_emails");
       if (typeof adminEmails === "string") {
@@ -283,6 +318,8 @@ export default function LoginPage() {
         return;
       }
 
+      const computedAge = calculateAge(regBirthDate);
+
       // 1. Create user in auth and store custom data in meta_data
       const { error: authError } = await supabase.auth.signUp({
         email: regEmail.trim(),
@@ -293,6 +330,7 @@ export default function LoginPage() {
             middle_name: regMiddleName.trim(),
             last_name: regLastName.trim(),
             birth_date: regBirthDate,
+            age: computedAge > 0 ? String(computedAge) : "",
             contact_number: regContact.trim(),
             badge: regBadge,
             avatar_url: selectedAvatar
@@ -307,16 +345,21 @@ export default function LoginPage() {
 
     } catch (err: any) {
       setError(err.message || "Failed to register.");
+    } finally {
+      setIsRegistering(false);
     }
   };
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isVerifying) return;
     if (!verificationCode || verificationCode.length !== 6) {
       setError("Please enter a valid 6-digit code.");
       return;
     }
     
+    setIsVerifying(true);
+    setError("");
     try {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: regEmail.trim(),
@@ -331,6 +374,8 @@ export default function LoginPage() {
       }
     } catch(err: any) {
       setError(err.message || "Invalid or expired code.");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -406,10 +451,29 @@ export default function LoginPage() {
               />
               <button 
                 type="submit"
+                disabled={isVerifying}
                 className="glow-text-yellow"
-                style={{ marginTop: "15px", padding: "15px", background: "rgba(255,234,0,0.1)", color: "var(--neon-yellow)", border: "1px solid var(--neon-yellow)", borderRadius: "8px", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "1.1rem", cursor: "pointer", transition: "all 0.3s" }}
+                style={{ 
+                  marginTop: "15px", 
+                  padding: "15px", 
+                  background: isVerifying ? "rgba(255,234,0,0.2)" : "rgba(255,234,0,0.1)", 
+                  color: "var(--neon-yellow)", 
+                  border: "1px solid var(--neon-yellow)", 
+                  borderRadius: "8px", 
+                  fontFamily: "var(--font-outfit)", 
+                  fontWeight: "bold", 
+                  fontSize: "1.1rem", 
+                  cursor: isVerifying ? "not-allowed" : "pointer", 
+                  opacity: isVerifying ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "all 0.3s" 
+                }}
               >
-                Verify & Enter
+                {isVerifying && <span className="heartist-spinner" />}
+                {isVerifying ? "Verifying Code..." : "Verify & Enter"}
               </button>
               <button
                 type="button"
@@ -449,11 +513,40 @@ export default function LoginPage() {
               </div>
               <button 
                 type="submit"
+                disabled={isLoggingIn}
                 className="glow-text-yellow"
-                style={{ marginTop: "10px", padding: "15px", background: "transparent", color: "var(--neon-yellow)", border: "1px solid var(--neon-yellow)", borderRadius: "8px", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "1.1rem", cursor: "pointer", transition: "all 0.3s" }}
+                style={{ 
+                  marginTop: "10px", 
+                  padding: "15px", 
+                  background: isLoggingIn ? "rgba(255,234,0,0.1)" : "transparent", 
+                  color: "var(--neon-yellow)", 
+                  border: "1px solid var(--neon-yellow)", 
+                  borderRadius: "8px", 
+                  fontFamily: "var(--font-outfit)", 
+                  fontWeight: "bold", 
+                  fontSize: "1.1rem", 
+                  cursor: isLoggingIn ? "not-allowed" : "pointer", 
+                  opacity: isLoggingIn ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "all 0.3s" 
+                }}
               >
-                Enter Portal
+                {isLoggingIn && <span className="heartist-spinner" />}
+                {isLoggingIn ? "Entering Portal..." : "Enter Portal"}
               </button>
+
+              <p style={{ textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "5px", fontFamily: "var(--font-outfit)" }}>
+                Don&apos;t have an account yet?{" "}
+                <span 
+                  onClick={() => { setActiveTab("register"); setError(""); setMessage(""); }}
+                  style={{ color: "var(--neon-yellow)", cursor: "pointer", fontWeight: "bold", textDecoration: "underline" }}
+                >
+                  Register here
+                </span>
+              </p>
             </form>
           ) : (
             <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
@@ -575,20 +668,37 @@ export default function LoginPage() {
               </div>
 
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <input 
-                  type="date" 
-                  title="Birthday"
-                  value={regBirthDate}
-                  onChange={(e) => setRegBirthDate(e.target.value)}
-                  style={{ flex: "1 1 140px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                />
-                <input 
-                  type="tel" 
-                  placeholder="Contact Number" 
-                  value={regContact}
-                  onChange={(e) => setRegContact(e.target.value)}
-                  style={{ flex: "2 1 160px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                />
+                <div style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                      Birthday
+                    </label>
+                    {regBirthDate && calculateAge(regBirthDate) > 0 && (
+                      <span style={{ fontSize: "0.75rem", color: "var(--neon-yellow)", fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
+                        {calculateAge(regBirthDate)} yrs old
+                      </span>
+                    )}
+                  </div>
+                  <input 
+                    type="date" 
+                    title="Birthday"
+                    value={regBirthDate}
+                    onChange={(e) => setRegBirthDate(e.target.value)}
+                    style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  />
+                </div>
+                <div style={{ flex: "2 1 160px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                    Contact Number
+                  </label>
+                  <input 
+                    type="tel" 
+                    placeholder="09XX XXX XXXX" 
+                    value={regContact}
+                    onChange={(e) => setRegContact(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 16))}
+                    style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  />
+                </div>
               </div>
 
               <input 
@@ -688,13 +798,65 @@ export default function LoginPage() {
                 </p>
               )}
 
+              {/* Terms of Service & Community Guidelines Checkbox */}
+              <div style={{ display: "flex", alignItems: "flex-start", gap: "10px", marginTop: "6px" }}>
+                <input 
+                  type="checkbox"
+                  id="agree-terms"
+                  checked={agreeToTerms}
+                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  style={{ width: "18px", height: "18px", marginTop: "2px", cursor: "pointer", accentColor: "var(--neon-yellow)" }}
+                />
+                <label htmlFor="agree-terms" style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", cursor: "pointer", lineHeight: "1.4" }}>
+                  I agree to the{" "}
+                  <span 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setShowGuidelinesModal(true);
+                    }}
+                    style={{ color: "var(--neon-yellow)", textDecoration: "underline", cursor: "pointer", fontWeight: "bold" }}
+                  >
+                    Terms of Service & Heartist Community Guidelines
+                  </span>
+                </label>
+              </div>
+
               <button 
                 type="submit"
+                disabled={isRegistering}
                 className="glow-text-white"
-                style={{ marginTop: "10px", padding: "15px", background: "transparent", color: "var(--neon-white)", border: "1px solid var(--neon-white)", borderRadius: "8px", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "1.1rem", cursor: "pointer", transition: "all 0.3s" }}
+                style={{ 
+                  marginTop: "10px", 
+                  padding: "15px", 
+                  background: isRegistering ? "rgba(255,255,255,0.05)" : "transparent", 
+                  color: isRegistering ? "var(--text-muted)" : "var(--neon-white)", 
+                  border: "1px solid var(--neon-white)", 
+                  borderRadius: "8px", 
+                  fontFamily: "var(--font-outfit)", 
+                  fontWeight: "bold", 
+                  fontSize: "1.1rem", 
+                  cursor: isRegistering ? "not-allowed" : "pointer", 
+                  opacity: isRegistering ? 0.7 : 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "all 0.3s" 
+                }}
               >
-                Sign Up & Enter
+                {isRegistering && <span className="heartist-spinner" />}
+                {isRegistering ? "Creating Account..." : "Sign Up & Enter"}
               </button>
+
+              <p style={{ textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "5px", fontFamily: "var(--font-outfit)" }}>
+                Already have an account?{" "}
+                <span 
+                  onClick={() => { setActiveTab("login"); setError(""); setMessage(""); }}
+                  style={{ color: "var(--neon-yellow)", cursor: "pointer", fontWeight: "bold", textDecoration: "underline" }}
+                >
+                  Log In
+                </span>
+              </p>
             </form>
           )}
         </div>
@@ -703,6 +865,165 @@ export default function LoginPage() {
       <Link href="/" className="nav-item" style={{ marginTop: "30px", padding: "10px 20px", border: "1px solid var(--neon-yellow)", borderRadius: "8px", textDecoration: "none", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
         Back to Dashboard
       </Link>
+
+      {/* Heartist Community Guidelines & Code of Honor Modal */}
+      {showGuidelinesModal && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px"
+          }}
+          onClick={() => setShowGuidelinesModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: "rgba(18, 18, 20, 0.98)",
+              border: "1px solid var(--neon-yellow)",
+              borderRadius: "16px",
+              padding: "28px 24px",
+              maxWidth: "540px",
+              width: "100%",
+              maxHeight: "85vh",
+              overflowY: "auto",
+              boxShadow: "0 0 35px rgba(255, 234, 0, 0.25)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              color: "#fff",
+              fontFamily: "var(--font-outfit)",
+              position: "relative"
+            }}
+          >
+            {/* Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <h2 style={{ fontSize: "1.4rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
+                  📜 Heartist Code of Honor
+                </h2>
+                <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
+                  Community Guidelines & Terms of Service
+                </p>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowGuidelinesModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "var(--text-muted)",
+                  fontSize: "1.5rem",
+                  cursor: "pointer",
+                  lineHeight: "1",
+                  padding: "0 4px"
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Intro */}
+            <div style={{ background: "rgba(255, 234, 0, 0.05)", borderLeft: "3px solid var(--neon-yellow)", padding: "10px 14px", borderRadius: "0 8px 8px 0" }}>
+              <p style={{ fontSize: "0.88rem", margin: 0, color: "var(--neon-white)", lineHeight: "1.5" }}>
+                Welcome sa <strong>Heartist</strong>! Ang portal na ito ay nilikha para sa ating pananampalataya, paglikha ng sining, at pagkakaisa bilang mga tagasunod ni Kristo.
+              </p>
+            </div>
+
+            {/* Sections */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "0.88rem", lineHeight: "1.6", color: "#ddd" }}>
+              <div>
+                <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
+                  1. 💛 Christ-Centered & Safe Space
+                </h4>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Panatilihing magalang, mapagpakumbaba, at nakapagpapatibay ang bawat interaksyon. Mahigpit na ipinagbabawal ang anumang pambu-bully, paninirang-puri, masasamang salita, o bastos na komento.
+                </p>
+              </div>
+
+              <div>
+                <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
+                  2. 🎨 Authentic & God-Honoring Creativity
+                </h4>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Ibahagi ang iyong mga sining, debosyon, at panalangin nang may katapatan at pagpupuri sa Diyos. Igalang ang gawa ng iba at huwag mag-post ng hindi naaangkop o hindi sa iyo nang walang pahintulot.
+                </p>
+              </div>
+
+              <div>
+                <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
+                  3. 🕊️ Peace, Prayer & Fellowship
+                </h4>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Ang prayer wall at community spaces ay para sa pagtutulungan at pagdarasal sa isa&apos;t isa. Panatilihing sagrado at mapayapa ang mga talakayan.
+                </p>
+              </div>
+
+              <div>
+                <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
+                  4. 🔒 Privacy & Account Responsibility
+                </h4>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Ingatan ang iyong password at impormasyon. Igalang din ang pribadong impormasyon at prayer requests ng iyong mga kasama sa camp.
+                </p>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", gap: "10px", marginTop: "10px" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgreeToTerms(true);
+                  setShowGuidelinesModal(false);
+                }}
+                className="glow-text-yellow"
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "var(--neon-yellow)",
+                  color: "#000",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: "bold",
+                  fontSize: "0.95rem",
+                  cursor: "pointer",
+                  transition: "opacity 0.2s"
+                }}
+              >
+                I Agree & Accept
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowGuidelinesModal(false)}
+                style={{
+                  padding: "12px 18px",
+                  background: "transparent",
+                  color: "var(--text-muted)",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  borderRadius: "8px",
+                  fontFamily: "var(--font-outfit)",
+                  fontSize: "0.95rem",
+                  cursor: "pointer"
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

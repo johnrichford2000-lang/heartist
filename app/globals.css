@@ -74,6 +74,21 @@ html, body {
   animation: neon-color-cycle 6s infinite alternate ease-in-out;
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.heartist-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--neon-yellow);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
 .card {
   background-color: var(--bg-card);
   backdrop-filter: blur(10px);
