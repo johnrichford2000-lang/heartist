@@ -229,7 +229,19 @@ export default function GlobalBottomNav() {
         </Link>
 
         {/* Canvas */}
-        <Link href="/community" data-active={pathname.startsWith("/community") ? "true" : undefined} className="responsive-nav-item" style={{ textDecoration: "none" }}>
+        <Link 
+          href="/community" 
+          data-active={pathname.startsWith("/community") ? "true" : undefined} 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="responsive-nav-item" 
+          style={{ textDecoration: "none" }}
+        >
           <span className="responsive-nav-icon" style={{color: pathname.startsWith("/community") ? "var(--neon-yellow)" : "var(--text-muted)", filter: pathname.startsWith("/community") ? "drop-shadow(0 0 5px var(--neon-yellow-glow))" : "none", transition: "all 0.3s ease-in-out"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
@@ -242,16 +254,27 @@ export default function GlobalBottomNav() {
         </Link>
 
         {/* Notification */}
-        <Link href="/notifications" data-active={pathname.startsWith("/notifications") ? "true" : undefined} onClick={() => {
-          const activeUserStr = localStorage.getItem("activeUser");
-          if (activeUserStr) {
-             const currentUserObj = JSON.parse(activeUserStr);
-             const currentUsername = currentUserObj.firstName;
-             localStorage.setItem(`navBadgeClearedAt_${currentUsername}`, Date.now().toString());
-             setUnreadNotifs(0);
-             window.dispatchEvent(new Event('storage'));
-          }
-        }} className="responsive-nav-item" style={{ textDecoration: "none" }}>
+        <Link 
+          href="/notifications" 
+          data-active={pathname.startsWith("/notifications") ? "true" : undefined} 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+            const activeUserStr = localStorage.getItem("activeUser");
+            if (activeUserStr) {
+               const currentUserObj = JSON.parse(activeUserStr);
+               const currentUsername = currentUserObj.firstName;
+               localStorage.setItem(`navBadgeClearedAt_${currentUsername}`, Date.now().toString());
+               setUnreadNotifs(0);
+               window.dispatchEvent(new Event('storage'));
+            }
+          }} 
+          className="responsive-nav-item" 
+          style={{ textDecoration: "none" }}
+        >
           <span className="responsive-nav-icon" style={{color: pathname.startsWith("/notifications") ? "var(--neon-yellow)" : "var(--text-muted)", filter: pathname.startsWith("/notifications") ? "drop-shadow(0 0 5px var(--neon-yellow-glow))" : "none", transition: "all 0.3s ease-in-out"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
@@ -267,7 +290,19 @@ export default function GlobalBottomNav() {
         </Link>
 
         {/* Fusion */}
-        <Link href="/fusion" data-active={pathname.startsWith("/fusion") ? "true" : undefined} className="responsive-nav-item" style={{ textDecoration: "none" }}>
+        <Link 
+          href="/fusion" 
+          data-active={pathname.startsWith("/fusion") ? "true" : undefined} 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="responsive-nav-item" 
+          style={{ textDecoration: "none" }}
+        >
           <span className="responsive-nav-icon" style={{color: pathname.startsWith("/fusion") ? "var(--neon-yellow)" : "var(--text-muted)", filter: pathname.startsWith("/fusion") ? "drop-shadow(0 0 5px var(--neon-yellow-glow))" : "none", transition: "all 0.3s ease-in-out"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 21 12 4 5 21" />
@@ -281,7 +316,19 @@ export default function GlobalBottomNav() {
         </Link>
 
         {/* HYN */}
-        <Link href="/joint" data-active={pathname.startsWith("/joint") ? "true" : undefined} className="responsive-nav-item" style={{ textDecoration: "none" }}>
+        <Link 
+          href="/joint" 
+          data-active={pathname.startsWith("/joint") ? "true" : undefined} 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="responsive-nav-item" 
+          style={{ textDecoration: "none" }}
+        >
           <span className="responsive-nav-icon" style={{color: pathname.startsWith("/joint") ? "var(--neon-yellow)" : "var(--text-muted)", filter: pathname.startsWith("/joint") ? "drop-shadow(0 0 5px var(--neon-yellow-glow))" : "none", transition: "all 0.3s ease-in-out"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 3z" />
@@ -291,7 +338,19 @@ export default function GlobalBottomNav() {
         </Link>
 
         {/* PR */}
-        <Link href="/prayer" data-active={pathname.startsWith("/prayer") ? "true" : undefined} className="responsive-nav-item" style={{ textDecoration: "none" }}>
+        <Link 
+          href="/prayer" 
+          data-active={pathname.startsWith("/prayer") ? "true" : undefined} 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="responsive-nav-item" 
+          style={{ textDecoration: "none" }}
+        >
           <span className="responsive-nav-icon" style={{color: pathname.startsWith("/prayer") ? "var(--neon-yellow)" : "var(--text-muted)", filter: pathname.startsWith("/prayer") ? "drop-shadow(0 0 5px var(--neon-yellow-glow))" : "none", transition: "all 0.3s ease-in-out"}}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M12 3v18" />

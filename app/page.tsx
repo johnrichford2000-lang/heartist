@@ -287,7 +287,17 @@ export default function Home() {
           <p style={{ color: "var(--neon-white)", fontSize: "0.95rem", lineHeight: "1.6", fontFamily: "var(--font-outfit)", flex: 1, minWidth: "200px" }}>
             <strong style={{ color: "var(--amber-yellow)" }}>Reflection:</strong> {dailyDevotion.reflection}
           </p>
-            <Link href="/devotion" style={{ padding: "8px 20px", background: "var(--neon-yellow)", color: "black", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontFamily: "var(--font-outfit)", transition: "all 0.3s" }}>
+            <Link 
+              href="/devotion" 
+              onClick={(e) => {
+                if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                  e.preventDefault();
+                  window.location.href = "/login";
+                  return;
+                }
+              }}
+              style={{ padding: "8px 20px", background: "var(--neon-yellow)", color: "black", borderRadius: "8px", textDecoration: "none", fontWeight: "bold", fontFamily: "var(--font-outfit)", transition: "all 0.3s" }}
+            >
               Write Reflection
             </Link>
           </div>
@@ -296,6 +306,10 @@ export default function Home() {
       {/* Announcement Widget */}
       <div 
         onClick={() => {
+          if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+            window.location.href = "/login";
+            return;
+          }
           setActiveAnnId(activeAnnId === 1 ? null : 1);
           if (hasUnread) {
             const userStr = localStorage.getItem("activeUser");
@@ -429,6 +443,10 @@ export default function Home() {
                             <div 
                               onClick={(e) => {
                                 e.stopPropagation();
+                                if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                                  window.location.href = "/login";
+                                  return;
+                                }
                                 if (ann.postId) {
                                   router.push(`/community?scrollTo=${ann.postId}`);
                                 } else if (ann.content && typeof ann.content === 'string' && (ann.content.includes("HYN Registration is now OPEN") || ann.content.toLowerCase().includes("hyn registration"))) {
@@ -548,7 +566,20 @@ export default function Home() {
                                   }}>
                                     {displayText}
                                     {isLong && ann.postId ? (
-                                      <Link href={`/community?scrollTo=${ann.postId}`} onClick={(e) => e.stopPropagation()} style={{ color: "var(--neon-yellow)", fontWeight: "bold", textDecoration: "none", cursor: "pointer" }}>see more...</Link>
+                                      <Link 
+                                        href={`/community?scrollTo=${ann.postId}`} 
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                                            e.preventDefault();
+                                            window.location.href = "/login";
+                                            return;
+                                          }
+                                        }} 
+                                        style={{ color: "var(--neon-yellow)", fontWeight: "bold", textDecoration: "none", cursor: "pointer" }}
+                                      >
+                                        see more...
+                                      </Link>
                                     ) : isLong ? (
                                       <span style={{ color: "var(--neon-yellow)", fontWeight: "bold" }}>...</span>
                                     ) : null}
@@ -594,6 +625,13 @@ export default function Home() {
         {/* Gallery Widget (2x2) */}
         <Link 
           href={exhibitPhotos.length > 0 ? `/fusion/memories?camp=${encodeURIComponent(exhibitPhotos[0].camp)}&day=${encodeURIComponent(exhibitPhotos[0].day)}&category=${encodeURIComponent(exhibitPhotos[0].category)}` : "/fusion/memories"}
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
           className="ios-widget" 
           style={{ 
             gridColumn: "span 2", 
@@ -643,13 +681,35 @@ export default function Home() {
         </div>
 
         {/* HYN Highlights Widget (1x1) */}
-        <Link href="/joint" className="ios-widget" style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 255, 255, 0.05)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}>
+        <Link 
+          href="/joint" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="ios-widget" 
+          style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 255, 255, 0.05)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}
+        >
           <span style={{ fontSize: "1.8rem", marginBottom: "5px" }}>🔥</span>
           <h3 style={{ margin: 0, fontSize: "1rem", fontFamily: "var(--font-outfit)", color: "white", lineHeight: "1.2" }}>HYN<br/>Highlights</h3>
         </Link>
 
         {/* Answered Prayers Widget (1x1) */}
-        <Link href="/prayer" className="ios-widget" style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 234, 0, 0.1)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", border: "1px solid rgba(255,234,0,0.3)" }}>
+        <Link 
+          href="/prayer" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="ios-widget" 
+          style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 234, 0, 0.1)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", border: "1px solid rgba(255,234,0,0.3)" }}
+        >
           <span style={{ fontSize: "1.8rem" }}>💛✨</span>
           <h3 style={{ margin: "5px 0 0 0", fontSize: "1.3rem", fontFamily: "var(--font-outfit)", color: "var(--sunflower-yellow)" }}>12</h3>
           <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--canary-yellow)", textTransform: "uppercase" }}>Answered</p>
@@ -657,27 +717,79 @@ export default function Home() {
       </div>
 
       <div className="cards-grid">
-        <Link href="/community" className="card card-full" style={{ borderLeft: "4px solid var(--neon-white)" }}>
+        <Link 
+          href="/community" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="card card-full" 
+          style={{ borderLeft: "4px solid var(--neon-white)" }}
+        >
           <h2 className="glow-text-white" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "2rem", marginBottom: "8px", color: "var(--neon-white)" }}>COMMUNITY HUB</h2>
           <p style={{ color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Connect, share, and grow together in one central place.</p>
         </Link>
 
-        <Link href="/fusion" className="card card-full">
+        <Link 
+          href="/fusion" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="card card-full"
+        >
           <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "2rem", marginBottom: "8px", color: "var(--sunflower-yellow)" }}>FUSION CAMP</h2>
           <p style={{ color: "var(--canary-yellow)", fontFamily: "var(--font-outfit)" }}>Ignite our passion and creativity all for God&apos;s glory.</p>
         </Link>
 
-        <Link href="/joint" className="card">
+        <Link 
+          href="/joint" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="card"
+        >
           <h2 className="glow-text-white" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "1.6rem", marginBottom: "8px", color: "var(--neon-white)" }}>HEART YOUTH NIGHT</h2>
           <p style={{ color: "var(--canary-yellow)", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>Gathering the community as one family.</p>
         </Link>
 
-        <Link href="/prayer" className="card">
+        <Link 
+          href="/prayer" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="card"
+        >
           <h2 className="glow-text-white" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "1.6rem", marginBottom: "8px", color: "var(--neon-white)" }}>PRAYER ROOM</h2>
           <p style={{ color: "var(--canary-yellow)", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>Share your petitions and stand with us in faith.</p>
         </Link>
 
-        <Link href="/get-involved" className="card" style={{ borderLeft: "3px solid var(--amber-yellow)" }}>
+        <Link 
+          href="/get-involved" 
+          onClick={(e) => {
+            if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+              e.preventDefault();
+              window.location.href = "/login";
+              return;
+            }
+          }}
+          className="card" 
+          style={{ borderLeft: "3px solid var(--amber-yellow)" }}
+        >
           <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 700, fontSize: "1.6rem", marginBottom: "8px", color: "var(--sunflower-yellow)" }}>GET INVOLVED</h2>
           <p style={{ color: "var(--canary-yellow)", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>Partner with us in fueling the next generation. Your prayers, time, and resources make this ministry possible.</p>
         </Link>

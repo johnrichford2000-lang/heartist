@@ -9,11 +9,21 @@ export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+        window.location.href = "/login";
+        return;
+      }
+      setIsAuthorized(true);
+    }
+
     const activeUserStr = localStorage.getItem("activeUser");
     if (!activeUserStr) {
-      router.push("/");
+      window.location.href = "/login";
+      return;
     } else {
       const currentUserObj = JSON.parse(activeUserStr);
       const currentUser = currentUserObj.firstName;
@@ -282,6 +292,8 @@ export default function NotificationsPage() {
       badge: "Heartist",
     };
   };
+
+  if (!isAuthorized) return null;
 
   return (
     <main

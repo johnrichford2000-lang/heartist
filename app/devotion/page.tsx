@@ -753,6 +753,13 @@ export default function DevotionPage() {
   });
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+        window.location.href = "/login";
+        return;
+      }
+    }
+
     const formatted = formatDevotionDate(new Date());
     setCurrentDate(formatted);
 
@@ -766,6 +773,12 @@ export default function DevotionPage() {
     let devotionsChannel: any = null;
 
     const initUserAndDevotions = async () => {
+      if (typeof window !== "undefined") {
+        if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+          window.location.href = "/login";
+          return;
+        }
+      }
       setIsLoading(true);
       const user = await getCurrentUser();
       if (!user) {
@@ -973,6 +986,10 @@ export default function DevotionPage() {
 
   const activeMethodObj = DEVOTION_METHODS.find(m => m.value === selectedMethod) || DEVOTION_METHODS[0];
   const boxTheme = getActiveBoxTheme(streakData, currentDate);
+
+  if (isLoading || !currentUser) {
+    return null;
+  }
 
   return (
     <main className="main-container" style={{ padding: "80px 20px" }}>

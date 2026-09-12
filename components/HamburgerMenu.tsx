@@ -16,33 +16,58 @@ export default function HamburgerMenu() {
   const [adminReportsCount, setAdminReportsCount] = useState(0);
   const [adminAppealsCount, setAdminAppealsCount] = useState(0);
   const [hasUnreadAnnouncement, setHasUnreadAnnouncement] = useState(false);
+  const [latestAnnId, setLatestAnnId] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
         const checkStatus = async () => {
-          const adminLog = localStorage.getItem("isAdminLoggedIn");
-          const userLog = localStorage.getItem("isHeartistLoggedIn");
+          const adminLog = localStorage.getItem("isAdminLoggedIn") === "true";
+          const userLog = localStorage.getItem("isHeartistLoggedIn") === "true";
           const auStr = localStorage.getItem("activeUser");
           let userId = "";
           let uname = "";
           
           if (auStr) {
-            const parsed = JSON.parse(auStr);
-            userId = parsed.id || parsed.firstName;
-            uname = parsed.firstName;
+            try {
+              const parsed = JSON.parse(auStr);
+              userId = parsed.id || parsed.firstName;
+              uname = parsed.firstName;
+            } catch (e) {}
           }
+
+          const currentUsername = adminLog ? "admin" : (uname || "guest");
           
           try {
             // Fetch unread announcements
-            const readKey = adminLog ? "lastReadAnnouncementId_admin" : `lastReadAnnouncementId_${uname}`;
-            const lastSeenKey = adminLog ? "lastSeenAnnouncementId_admin" : `lastSeenAnnouncementId_${uname}`;
+            const readKey = `lastReadAnnouncementId_${currentUsername}`;
+            const lastSeenKey = `lastSeenAnnouncementId_${currentUsername}`;
             const lastReadId = Number(localStorage.getItem(readKey) || localStorage.getItem(lastSeenKey) || 0);
             const { data: anns } = await supabase.from("announcements").select("id").order("created_at", { ascending: false }).limit(1);
+            let annUnread = false;
             if (anns && anns.length > 0) {
-              setHasUnreadAnnouncement(Number(anns[0].id) > lastReadId);
+              const latestId = String(anns[0].id);
+              setLatestAnnId(latestId);
+              annUnread = Number(latestId) > lastReadId;
             } else {
-              setHasUnreadAnnouncement(false);
+              setLatestAnnId(null);
             }
+
+            let regUnread = false;
+            let parsedBlueprint = null;
+            const savedBlueprint = localStorage.getItem("fusionBlueprintData");
+            if (savedBlueprint) {
+              try {
+                parsedBlueprint = JSON.parse(savedBlueprint);
+              } catch(e) {}
+            }
+            if (parsedBlueprint && parsedBlueprint.isRegistrationOpen) {
+              const lastSeenRegStamp = localStorage.getItem(`lastSeenRegistrationOpen_${currentUsername}`);
+              if (parsedBlueprint.timestamp && parsedBlueprint.timestamp !== lastSeenRegStamp) {
+                regUnread = true;
+              }
+            }
+
+            setHasUnreadAnnouncement(annUnread || regUnread);
 
             // Fetch admin counts
             if (adminLog) {
@@ -130,7 +155,8 @@ export default function HamburgerMenu() {
 
   if (pathname === "/login") return null;
 
-  const hasAnyNotification = isAdmin ? (adminAppealsCount > 0 || adminReportsCount > 0 || hasUnreadAnnouncement) : (hasUnreadMessages || hasUnreadAnnouncement);
+  const hasUnreadHomeAnnouncement = hasUnreadAnnouncement && (isAdmin ? pathname !== "/admin" : pathname !== "/");
+  const hasAnyNotification = isAdmin ? (adminAppealsCount > 0 || adminReportsCount > 0 || hasUnreadHomeAnnouncement) : (hasUnreadMessages || hasUnreadHomeAnnouncement);
 
   return (
     <>
@@ -211,13 +237,56 @@ export default function HamburgerMenu() {
                 <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-muted)" }}>Main</div>
                 <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }}></div>
               </div>
-              <Link href="/" onClick={() => setIsOpen(false)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Link 
+                href="/" 
+                onClick={() => {
+                  setIsOpen(false);
+                  const adminLog = localStorage.getItem("isAdminLoggedIn") === "true";
+                  const auStr = localStorage.getItem("activeUser");
+                  let uname = "";
+                  if (auStr) {
+                    try { uname = JSON.parse(auStr).firstName; } catch(e) {}
+                  }
+                  const currentUsername = adminLog ? "admin" : (uname || "guest");
+                  if (latestAnnId) {
+                    localStorage.setItem(`lastSeenAnnouncementId_${currentUsername}`, latestAnnId);
+                    localStorage.setItem(`lastReadAnnouncementId_${currentUsername}`, latestAnnId);
+                  }
+                  const savedBlueprint = localStorage.getItem("fusionBlueprintData");
+                  if (savedBlueprint) {
+                    try {
+                      const parsedBlueprint = JSON.parse(savedBlueprint);
+                      if (parsedBlueprint.timestamp) {
+                        localStorage.setItem(`lastSeenRegistrationOpen_${currentUsername}`, parsedBlueprint.timestamp);
+                        localStorage.setItem(`lastReadRegistrationOpen_${currentUsername}`, parsedBlueprint.timestamp);
+                      }
+                    } catch (e) {}
+                  }
+                  setHasUnreadAnnouncement(false);
+                  window.dispatchEvent(new CustomEvent("announcements_updated"));
+                  window.dispatchEvent(new Event("storage"));
+                }} 
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 <span>Home</span>
                 {hasUnreadAnnouncement && pathname !== "/" && <span style={{ width: "8px", height: "8px", background: "red", borderRadius: "50%" }}></span>}
               </Link>
               <Link href="/about" onClick={() => setIsOpen(false)}>About Us</Link>
               <Link href="/vision" onClick={() => setIsOpen(false)}>Vision & Mission</Link>
-              <Link href="/get-involved" onClick={() => setIsOpen(false)}>Get Involved</Link>
+              <Link 
+                href="/get-involved" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }}
+              >
+                Get Involved
+              </Link>
               <Link href="/contact" onClick={() => setIsOpen(false)}>Connect</Link>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "5px", marginBottom: "5px" }}>
@@ -225,17 +294,81 @@ export default function HamburgerMenu() {
                 <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-muted)" }}>Activities</div>
                 <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }}></div>
               </div>
-              <Link href="/devotion" onClick={() => setIsOpen(false)}>Daily Devotion</Link>
-              <Link href="/prayer" onClick={() => setIsOpen(false)}>Prayer Room</Link>
-              <Link href="/fusion" onClick={() => setIsOpen(false)}>Fusion Camp</Link>
-              <Link href="/joint" onClick={() => setIsOpen(false)}>Heart Youth Night</Link>
+              <Link 
+                href="/devotion" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }}
+              >
+                Daily Devotion
+              </Link>
+              <Link 
+                href="/prayer" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }}
+              >
+                Prayer Room
+              </Link>
+              <Link 
+                href="/fusion" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }}
+              >
+                Fusion Camp
+              </Link>
+              <Link 
+                href="/joint" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }}
+              >
+                Heart Youth Night
+              </Link>
 
               <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "5px", marginBottom: "5px" }}>
                 <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }}></div>
                 <div style={{ fontSize: "0.75rem", textTransform: "uppercase", letterSpacing: "1px", color: "var(--text-muted)" }}>Personal</div>
                 <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }}></div>
               </div>
-              <Link href="/fusion/inbox" onClick={() => setIsOpen(false)} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <Link 
+                href="/fusion/inbox" 
+                onClick={(e) => {
+                  if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+                    e.preventDefault();
+                    setIsOpen(false);
+                    window.location.href = "/login";
+                    return;
+                  }
+                  setIsOpen(false);
+                }} 
+                style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
+              >
                 Inbox
                 {hasUnreadMessages && (
                   <span style={{ width: "10px", height: "10px", background: "red", borderRadius: "50%", display: "inline-block" }}></span>

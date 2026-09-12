@@ -397,6 +397,7 @@ export default function CanvasPage() {
   );
 
   const [activeUser, setActiveUser] = useState<any>(null);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   const [isBlockedUser, setIsBlockedUser] = useState(false);
   const [penaltyExpiry, setPenaltyExpiry] = useState<number | null>(null);
@@ -446,6 +447,12 @@ export default function CanvasPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+        window.location.href = "/login";
+        return;
+      }
+      setIsAuthorized(true);
+
       supabase
         .from("profiles")
         .select(
@@ -2212,6 +2219,10 @@ export default function CanvasPage() {
         const interval = setInterval(() => setTick(t => t + 1), 10000);
         return () => clearInterval(interval);
     }, []);
+
+  if (!isAuthorized) {
+    return null;
+  }
 
 return (
     

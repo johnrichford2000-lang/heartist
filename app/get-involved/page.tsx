@@ -253,6 +253,12 @@ export default function GetInvolvedPage() {
   // 1. Check Authentication & Admin status
   useEffect(() => {
     async function checkAuth() {
+      if (typeof window !== "undefined") {
+        if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
+          window.location.href = "/login";
+          return;
+        }
+      }
       try {
         const user = await getCurrentUser();
         if (!user) {
@@ -757,6 +763,10 @@ export default function GetInvolvedPage() {
   };
 
   const isShowingUserForm = !isAdmin || adminViewMode === "user_form";
+
+  if (loadingAuth || !currentUser) {
+    return null;
+  }
 
   return (
     <main className="main-container" style={{ padding: "clamp(60px, 8vw, 80px) clamp(12px, 3vw, 20px) clamp(140px, 16vh, 180px)" }}>
