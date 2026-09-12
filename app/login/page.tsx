@@ -381,7 +381,12 @@ export default function LoginPage() {
       setMessage("Success! A 6-digit verification code has been sent to your email. Please enter it below.");
 
     } catch (err: any) {
-      setError(err.message || "Failed to register.");
+      const msg = err.message || "Failed to register.";
+      if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
+        setError("Email rate limit reached. Please wait a few minutes before trying to register again.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsRegistering(false);
     }
@@ -436,7 +441,12 @@ export default function LoginPage() {
       setResendCooldown(60);
       setVerificationCode("");
     } catch (err: any) {
-      setError(err.message || "Failed to resend code. Please try again.");
+      const msg = err.message || "Failed to resend code. Please try again.";
+      if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
+        setError("Email rate limit reached. Please wait a few minutes before requesting another code.");
+      } else {
+        setError(msg);
+      }
     } finally {
       setIsResending(false);
     }
