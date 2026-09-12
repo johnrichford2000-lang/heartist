@@ -460,6 +460,57 @@ export default function LoginPage() {
 
   return (
     <main className="main-container" style={{ padding: "60px 20px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh" }}>
+      {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Main Home) */}
+      <Link
+        href="/"
+        aria-label="Back to Dashboard"
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "18px",
+          zIndex: 900,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "rgba(10, 10, 10, 0.75)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid var(--neon-yellow)",
+          color: "var(--neon-yellow)",
+          textDecoration: "none",
+          boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+          transition: "all 0.25s ease",
+          cursor: "pointer"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+          e.currentTarget.style.transform = "translateX(-3px)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+          e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+          e.currentTarget.style.transform = "translateX(0)";
+        }}
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </Link>
+
       <HeartistLogo className="animated-glow-text" width={60} height={60} />
       <h1 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontSize: "2rem", marginTop: "20px", marginBottom: "30px", textTransform: "uppercase" }}>
         Heartist Portal
@@ -1089,7 +1140,13 @@ export default function LoginPage() {
                   type="checkbox"
                   id="agree-terms"
                   checked={agreeToTerms}
-                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  onChange={(e) => {
+                    const isChecked = e.target.checked;
+                    setAgreeToTerms(isChecked);
+                    if (isChecked) {
+                      setShowGuidelinesModal(true);
+                    }
+                  }}
                   style={{ width: "18px", height: "18px", marginTop: "2px", cursor: "pointer", accentColor: "var(--neon-yellow)" }}
                 />
                 <label htmlFor="agree-terms" style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", cursor: "pointer", lineHeight: "1.4" }}>
@@ -1160,10 +1217,6 @@ export default function LoginPage() {
           )}
         </div>
       </div>
-      
-      <Link href="/" className="nav-item" style={{ marginTop: "30px", padding: "10px 20px", border: "1px solid var(--neon-yellow)", borderRadius: "8px", textDecoration: "none", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
-        Back to Dashboard
-      </Link>
 
       {/* Heartist Community Guidelines & Code of Honor Modal */}
       {showGuidelinesModal && (
