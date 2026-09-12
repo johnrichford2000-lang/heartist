@@ -67,6 +67,23 @@ export default function LoginPage() {
   const [showRegPwd, setShowRegPwd] = useState(false);
   const [showRegConfirmPwd, setShowRegConfirmPwd] = useState(false);
 
+  // Check if registration form is incomplete or terms are not accepted
+  const isRegisterFormIncomplete = 
+    !regFirstName.trim() || 
+    !regLastName.trim() || 
+    !regBirthDate || 
+    !regContact.trim() || 
+    !regEmail.trim() || 
+    !regPassword || 
+    !regConfirmPassword;
+
+  const isRegisterDisabled = 
+    isRegistering || 
+    isRegisterFormIncomplete || 
+    !agreeToTerms ||
+    regPassword.length < 6 ||
+    regPassword !== regConfirmPassword;
+
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -823,25 +840,39 @@ export default function LoginPage() {
 
               <button 
                 type="submit"
-                disabled={isRegistering}
-                className="glow-text-white"
+                disabled={isRegisterDisabled}
+                className={isRegisterDisabled ? "" : "glow-text-yellow"}
+                title={
+                  isRegistering
+                    ? "Creating your account..."
+                    : isRegisterFormIncomplete
+                      ? "Paki-fill up ang lahat ng impormasyon para makapag-sign up."
+                      : regPassword.length < 6
+                        ? "Ang password ay dapat hindi bababa sa 6 characters."
+                        : regPassword !== regConfirmPassword
+                          ? "Hindi magkatugma ang password at confirm password."
+                          : !agreeToTerms
+                            ? "Paki-check at tanggapin ang Terms of Service & Community Guidelines bago mag-sign up."
+                            : "Sign Up & Enter"
+                }
                 style={{ 
                   marginTop: "10px", 
                   padding: "15px", 
-                  background: isRegistering ? "rgba(255,255,255,0.05)" : "transparent", 
-                  color: isRegistering ? "var(--text-muted)" : "var(--neon-white)", 
-                  border: "1px solid var(--neon-white)", 
+                  background: isRegisterDisabled ? "rgba(255,255,255,0.03)" : "rgba(255,234,0,0.12)", 
+                  color: isRegisterDisabled ? "rgba(255,255,255,0.3)" : "var(--neon-yellow)", 
+                  border: isRegisterDisabled ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--neon-yellow)", 
                   borderRadius: "8px", 
                   fontFamily: "var(--font-outfit)", 
                   fontWeight: "bold", 
                   fontSize: "1.1rem", 
-                  cursor: isRegistering ? "not-allowed" : "pointer", 
-                  opacity: isRegistering ? 0.7 : 1,
+                  cursor: isRegisterDisabled ? "not-allowed" : "pointer", 
+                  opacity: isRegisterDisabled ? 0.45 : 1,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
-                  transition: "all 0.3s" 
+                  transition: "all 0.3s",
+                  boxShadow: isRegisterDisabled ? "none" : "0 0 15px rgba(255, 234, 0, 0.25)"
                 }}
               >
                 {isRegistering && <span className="heartist-spinner" />}
