@@ -916,38 +916,39 @@ export default function LoginPage() {
                 />
               </div>
 
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <div style={{ flex: "1 1 140px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                      Birthday
-                    </label>
-                    {regBirthDate && calculateAge(regBirthDate) > 0 && (
-                      <span style={{ fontSize: "0.75rem", color: "var(--neon-yellow)", fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                        {calculateAge(regBirthDate)} yrs old
-                      </span>
-                    )}
-                  </div>
-                  <input 
-                    type="date" 
-                    title="Birthday"
-                    value={regBirthDate}
-                    onChange={(e) => setRegBirthDate(e.target.value)}
-                    style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                  />
-                </div>
-                <div style={{ flex: "2 1 160px", display: "flex", flexDirection: "column", gap: "4px" }}>
+              {/* Birthday Field (Dedicated Row) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px", width: "100%" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                    Contact Number (Optional)
+                    Birthday
                   </label>
-                  <input 
-                    type="tel" 
-                    placeholder="09XX XXX XXXX (Optional)" 
-                    value={regContact}
-                    onChange={(e) => setRegContact(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 16))}
-                    style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                  />
+                  {regBirthDate && calculateAge(regBirthDate) > 0 && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--neon-yellow)", fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
+                      {calculateAge(regBirthDate)} yrs old
+                    </span>
+                  )}
                 </div>
+                <input 
+                  type="date" 
+                  title="Birthday"
+                  value={regBirthDate}
+                  onChange={(e) => setRegBirthDate(e.target.value)}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", colorScheme: "dark", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                />
+              </div>
+
+              {/* Contact Number Field (Dedicated New Line) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "5px", width: "100%" }}>
+                <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                  Contact Number (Optional)
+                </label>
+                <input 
+                  type="tel" 
+                  placeholder="09XX XXX XXXX (Optional)" 
+                  value={regContact}
+                  onChange={(e) => setRegContact(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 16))}
+                  style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                />
               </div>
 
               <input 

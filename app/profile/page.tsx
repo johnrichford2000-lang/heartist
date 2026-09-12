@@ -536,30 +536,30 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "15px" }}>
-            {!isAdminProfile && (
-            <div style={{ flex: "1 1 140px" }}>
-                          <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", marginBottom: "5px", display: "block" }}>Birthday</label>
-                          <input 
-                            type="date" 
-                            value={regBirthDate}
-                            onChange={(e) => setRegBirthDate(e.target.value)}
-                            style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-                          />
-                        </div>
-            )}
-            {!isAdminProfile && (
-            <div style={{ flex: "2 1 160px" }}>
-              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", marginBottom: "5px", display: "block" }}>Contact Number</label>
+          {!isAdminProfile && (
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Birthday</label>
               <input 
-                type="tel" 
-                value={regContact}
-                onChange={(e) => setRegContact(e.target.value)}
-                style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                type="date" 
+                value={regBirthDate}
+                onChange={(e) => setRegBirthDate(e.target.value)}
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", colorScheme: "dark", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
               />
             </div>
-            )}
-          </div>
+          )}
+
+          {!isAdminProfile && (
+            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
+              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Contact Number</label>
+              <input 
+                type="tel" 
+                placeholder="09XX XXX XXXX"
+                value={regContact}
+                onChange={(e) => setRegContact(e.target.value)}
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+              />
+            </div>
+          )}
 
           {!isAdminProfile && (
           <div>
