@@ -24,7 +24,7 @@ BEGIN
   SELECT value INTO admin_list FROM public.system_settings WHERE id = 'admin_emails';
   IF admin_list IS NOT NULL THEN
     IF jsonb_typeof(admin_list) = 'array' THEN
-      IF admin_list ? current_email THEN
+      IF admin_list @> to_jsonb(current_email) THEN
         RETURN TRUE;
       END IF;
     END IF;
