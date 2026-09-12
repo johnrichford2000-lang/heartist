@@ -622,60 +622,57 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* Resend Checkbox Box */}
+              {/* Resend Action Box */}
               <div style={{ 
                 width: "100%", 
                 background: "rgba(255, 255, 255, 0.03)", 
                 border: "1px solid rgba(255, 255, 255, 0.1)", 
                 borderRadius: "8px", 
-                padding: "12px 14px",
+                padding: "10px 14px",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: "10px"
+                gap: "12px"
               }}>
-                <label 
-                  htmlFor="resend-checkbox" 
-                  style={{ 
-                    display: "flex", 
-                    alignItems: "center", 
-                    gap: "10px", 
-                    cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
-                    fontSize: "0.85rem",
-                    color: resendCooldown > 0 || isResending ? "var(--text-muted)" : "var(--neon-white)",
+                <span style={{ 
+                  fontSize: "0.85rem", 
+                  color: "var(--neon-white)",
+                  fontFamily: "var(--font-outfit)"
+                }}>
+                  Didn&apos;t get a code?
+                </span>
+
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0 || isResending}
+                  onClick={handleResendOtp}
+                  style={{
+                    background: resendCooldown > 0 || isResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
+                    border: resendCooldown > 0 || isResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
+                    borderRadius: "6px",
+                    padding: "7px 14px",
+                    color: resendCooldown > 0 || isResending ? "var(--text-muted)" : "var(--neon-yellow)",
+                    fontSize: "0.82rem",
                     fontFamily: "var(--font-outfit)",
-                    userSelect: "none",
-                    flex: 1
+                    fontWeight: "bold",
+                    cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
+                    transition: "all 0.3s",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px"
                   }}
                 >
-                  <input 
-                    type="checkbox"
-                    id="resend-checkbox"
-                    checked={isResending}
-                    disabled={resendCooldown > 0 || isResending}
-                    onChange={() => {
-                      if (resendCooldown === 0 && !isResending) {
-                        handleResendOtp();
-                      }
-                    }}
-                    style={{ 
-                      width: "16px", 
-                      height: "16px", 
-                      cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
-                      accentColor: "var(--neon-yellow)"
-                    }}
-                  />
-                  <span>Didn&apos;t get a code? Resend</span>
-                </label>
-
-                <span style={{ 
-                  fontSize: "0.8rem", 
-                  fontFamily: "monospace, var(--font-outfit)", 
-                  color: resendCooldown > 0 ? "var(--text-muted)" : "var(--neon-yellow)",
-                  fontWeight: "bold"
-                }}>
-                  {isResending ? "Sending..." : resendCooldown > 0 ? `${resendCooldown}s` : "Available"}
-                </span>
+                  {isResending ? (
+                    <>
+                      <span className="heartist-spinner" style={{ width: "12px", height: "12px", borderWidth: "1.5px" }} />
+                      Sending...
+                    </>
+                  ) : resendCooldown > 0 ? (
+                    `Resend in ${resendCooldown}s`
+                  ) : (
+                    "Resend Code"
+                  )}
+                </button>
               </div>
 
               {/* Action Button */}
