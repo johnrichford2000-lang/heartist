@@ -65,8 +65,8 @@ export default function LoginPage() {
 
   // Change Email Address modal state
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
-  const [changeEmailStep, setChangeEmailStep] = useState<"request" | "verify">("request");
-  const [changeCurrentIdentifier, setChangeCurrentIdentifier] = useState("");
+  const [changeEmailStep, setChangeEmailStep] = useState<"auth" | "new_email" | "verify">("auth");
+  const [changeCurrentEmail, setChangeCurrentEmail] = useState("");
   const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
   const [changeNewEmail, setChangeNewEmail] = useState("");
   const [changeEmailCode, setChangeEmailCode] = useState("");
@@ -693,52 +693,83 @@ export default function LoginPage() {
     }
   };
 
-  const handleRequestChangeEmail = async (e: React.FormEvent) => {
+  // Step 1: Verify current registered credentials with delay and strict First Name prohibition
+  const handleVerifyCurrentCredentials = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isChangeEmailLoading) return;
     setChangeEmailError("");
     setChangeEmailMessage("");
 
-    const currentIdent = changeCurrentIdentifier.trim();
+    const currentEmail = changeCurrentEmail.trim();
     const currentPwd = changeCurrentPassword;
-    const newEmail = changeNewEmail.trim();
 
-    if (!currentIdent || !currentPwd || !newEmail) {
-      setChangeEmailError("Please fill in all fields.");
+    if (!currentEmail || !currentPwd) {
+      setChangeEmailError("Please enter your current registered email and password.");
       return;
     }
 
-    if (!newEmail.includes("@") || !newEmail.includes(".")) {
-      setChangeEmailError("Please enter a valid new email address.");
+    // Strict validation: prohibit First Name. Must be a valid email format.
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!currentEmail.includes("@") || !currentEmail.includes(".") || currentEmail.includes(" ") || !emailRegex.test(currentEmail)) {
+      setChangeEmailError("First Name is prohibited. Please enter your valid registered email address.");
       return;
     }
 
     setIsChangeEmailLoading(true);
     try {
-      let emailToAuthenticate = currentIdent;
+      // Intentional delay before transition for natural security check feedback
+      await new Promise((resolve) => setTimeout(resolve, 800));
 
-      // If user typed first name instead of email
-      if (!emailToAuthenticate.includes("@")) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("email")
-          .ilike("first_name", emailToAuthenticate)
-          .maybeSingle();
+      // Authenticate with current email & password
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email: currentEmail,
+        password: currentPwd
+      });
 
-        if (profile && profile.email) {
-          emailToAuthenticate = profile.email;
-        } else {
-          setChangeEmailError("Account not found with that First Name.");
-          return;
-        }
-      }
-
-      if (emailToAuthenticate.toLowerCase() === newEmail.toLowerCase()) {
-        setChangeEmailError("The new email address cannot be the same as your current email.");
+      if (authError || !authData.user) {
+        setChangeEmailError("Incorrect email or password. Please verify your credentials.");
         return;
       }
 
-      // Check if new email is already taken in profiles
+      // On successful verification, advance to Step 2 (enter new email)
+      setChangeEmailStep("new_email");
+      setChangeEmailMessage("Account credentials verified. Please enter your new email address.");
+    } catch (err: any) {
+      setChangeEmailError(err.message || "Failed to verify credentials. Please try again.");
+    } finally {
+      setIsChangeEmailLoading(false);
+    }
+  };
+
+  // Step 2: Send OTP to New Email Address
+  const handleSendOtpToNewEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isChangeEmailLoading) return;
+    setChangeEmailError("");
+    setChangeEmailMessage("");
+
+    const currentEmail = changeCurrentEmail.trim().toLowerCase();
+    const newEmail = changeNewEmail.trim().toLowerCase();
+
+    if (!newEmail) {
+      setChangeEmailError("Please enter your new email address.");
+      return;
+    }
+
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newEmail)) {
+      setChangeEmailError("Please enter a valid new email address.");
+      return;
+    }
+
+    if (currentEmail === newEmail) {
+      setChangeEmailError("The new email address cannot be the same as your current email.");
+      return;
+    }
+
+    setIsChangeEmailLoading(true);
+    try {
+      // Check if new email is already registered to another account
       const { data: existingProfile } = await supabase
         .from("profiles")
         .select("id")
@@ -750,18 +781,7 @@ export default function LoginPage() {
         return;
       }
 
-      // Authenticate with current credentials to ensure permission
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailToAuthenticate,
-        password: currentPwd
-      });
-
-      if (authError || !authData.user) {
-        setChangeEmailError("Incorrect current email/first name or password.");
-        return;
-      }
-
-      // Trigger Supabase to send OTP verification code to new email
+      // Trigger Supabase Auth to send OTP code to the new email
       const { error: updateAuthError } = await supabase.auth.updateUser({
         email: newEmail
       });
@@ -774,7 +794,12 @@ export default function LoginPage() {
       setChangeEmailCode("");
       setChangeEmailMessage(`A 6-digit OTP verification code has been sent to ${newEmail}. Please enter it below to confirm.`);
     } catch (err: any) {
-      setChangeEmailError(err.message || "Failed to initiate email change. Please check credentials and try again.");
+      const msg = err.message || "Failed to send OTP to new email. Please try again.";
+      if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
+        setChangeEmailError("Email rate limit reached. Please wait a few minutes before requesting another code.");
+      } else {
+        setChangeEmailError(msg);
+      }
     } finally {
       setIsChangeEmailLoading(false);
     }
@@ -849,7 +874,7 @@ export default function LoginPage() {
       localStorage.removeItem("isAdminLoggedIn");
 
       setShowChangeEmailModal(false);
-      setChangeEmailStep("request");
+      setChangeEmailStep("auth");
       setLoginIdentifier(newEmail);
       setLoginPassword("");
       setMessage("Email address successfully verified & updated with OTP! Please log in with your new email.");
@@ -1205,11 +1230,17 @@ export default function LoginPage() {
                     type="button" 
                     onClick={() => {
                       setShowChangeEmailModal(true);
+                      setChangeEmailStep("auth");
                       setChangeEmailError("");
                       setChangeEmailMessage("");
-                      setChangeCurrentIdentifier(loginIdentifier);
+                      if (loginIdentifier.includes("@") && loginIdentifier.includes(".")) {
+                        setChangeCurrentEmail(loginIdentifier.trim());
+                      } else {
+                        setChangeCurrentEmail("");
+                      }
                       setChangeCurrentPassword("");
                       setChangeNewEmail("");
+                      setChangeEmailCode("");
                     }} 
                     style={{ 
                       background: "none", 
@@ -2240,9 +2271,11 @@ export default function LoginPage() {
                   Change Email Address (OTP)
                 </h2>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
-                  {changeEmailStep === "request"
-                    ? "Verify your account credentials to send an OTP to your new email."
-                    : "Enter the 6-digit OTP code sent to your new email address."}
+                  {changeEmailStep === "auth"
+                    ? "Step 1 of 3: Enter your registered email and password to verify your account."
+                    : changeEmailStep === "new_email"
+                    ? "Step 2 of 3: Enter your new email address to receive a 6-digit OTP."
+                    : "Step 3 of 3: Enter the 6-digit OTP code sent to your new email."}
                 </p>
               </div>
               <button 
@@ -2263,6 +2296,31 @@ export default function LoginPage() {
               </button>
             </div>
 
+            {/* Step Progress Bar */}
+            <div style={{ display: "flex", gap: "6px", margin: "2px 0" }}>
+              <div style={{
+                flex: 1,
+                height: "4px",
+                borderRadius: "2px",
+                backgroundColor: "var(--neon-yellow)",
+                boxShadow: "0 0 8px rgba(255, 234, 0, 0.5)"
+              }} />
+              <div style={{
+                flex: 1,
+                height: "4px",
+                borderRadius: "2px",
+                backgroundColor: changeEmailStep === "new_email" || changeEmailStep === "verify" ? "var(--neon-yellow)" : "rgba(255, 255, 255, 0.15)",
+                boxShadow: changeEmailStep === "new_email" || changeEmailStep === "verify" ? "0 0 8px rgba(255, 234, 0, 0.5)" : "none"
+              }} />
+              <div style={{
+                flex: 1,
+                height: "4px",
+                borderRadius: "2px",
+                backgroundColor: changeEmailStep === "verify" ? "var(--neon-yellow)" : "rgba(255, 255, 255, 0.15)",
+                boxShadow: changeEmailStep === "verify" ? "0 0 8px rgba(255, 234, 0, 0.5)" : "none"
+              }} />
+            </div>
+
             {changeEmailError && (
               <p style={{ color: "#FF6B6B", fontSize: "0.85rem", margin: 0, background: "rgba(255,107,107,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,107,107,0.2)" }}>
                 {changeEmailError}
@@ -2274,17 +2332,23 @@ export default function LoginPage() {
               </p>
             )}
 
-            {changeEmailStep === "request" ? (
-              <form onSubmit={handleRequestChangeEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* STEP 1: Current Credentials Authentication */}
+            {changeEmailStep === "auth" && (
+              <form onSubmit={handleVerifyCurrentCredentials} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div>
-                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    Current Email or First Name
-                  </label>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                    <label style={{ fontSize: "0.82rem", color: "var(--text-muted)" }}>
+                      Registered Email Address
+                    </label>
+                    <span style={{ fontSize: "0.72rem", color: "#FF6B6B", fontWeight: 600 }}>
+                      * Email only (No First Name)
+                    </span>
+                  </div>
                   <input 
-                    type="text" 
-                    placeholder="Enter current email or first name" 
-                    value={changeCurrentIdentifier}
-                    onChange={(e) => setChangeCurrentIdentifier(e.target.value)}
+                    type="email" 
+                    placeholder="Enter your registered email address" 
+                    value={changeCurrentEmail}
+                    onChange={(e) => setChangeCurrentEmail(e.target.value)}
                     required
                     style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
                   />
@@ -2297,7 +2361,7 @@ export default function LoginPage() {
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     <input 
                       type={showChangeCurrentPwd ? "text" : "password"} 
-                      placeholder="Enter current password" 
+                      placeholder="Enter your current password" 
                       value={changeCurrentPassword}
                       onChange={(e) => setChangeCurrentPassword(e.target.value)}
                       required
@@ -2313,24 +2377,10 @@ export default function LoginPage() {
                   </div>
                 </div>
 
-                <div>
-                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    New Email Address
-                  </label>
-                  <input 
-                    type="email" 
-                    placeholder="newemail@example.com" 
-                    value={changeNewEmail}
-                    onChange={(e) => setChangeNewEmail(e.target.value)}
-                    required
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                  />
-                </div>
-
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isChangeEmailLoading || !changeCurrentIdentifier.trim() || !changeCurrentPassword || !changeNewEmail.trim()}
+                    disabled={isChangeEmailLoading || !changeCurrentEmail.trim() || !changeCurrentPassword}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
@@ -2350,7 +2400,7 @@ export default function LoginPage() {
                     }}
                   >
                     {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                    {isChangeEmailLoading ? "Verifying..." : "Send OTP to New Email"}
+                    {isChangeEmailLoading ? "Verifying credentials..." : "Verify Credentials"}
                   </button>
                   <button
                     type="button"
@@ -2370,7 +2420,116 @@ export default function LoginPage() {
                   </button>
                 </div>
               </form>
-            ) : (
+            )}
+
+            {/* STEP 2: Enter New Email Address */}
+            {changeEmailStep === "new_email" && (
+              <form onSubmit={handleSendOtpToNewEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {/* Verified Account Indicator */}
+                <div style={{
+                  background: "rgba(0, 255, 128, 0.06)",
+                  border: "1px solid rgba(0, 255, 128, 0.25)",
+                  borderRadius: "8px",
+                  padding: "10px 14px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "8px"
+                }}>
+                  <div style={{ display: "flex", flexDirection: "column" }}>
+                    <span style={{ fontSize: "0.72rem", color: "#00FF80", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      ✓ Account Verified
+                    </span>
+                    <span style={{ fontSize: "0.88rem", color: "#fff", fontWeight: "bold" }}>
+                      {changeCurrentEmail}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChangeEmailStep("auth");
+                      setChangeEmailError("");
+                      setChangeEmailMessage("");
+                    }}
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-muted)",
+                      fontSize: "0.75rem",
+                      textDecoration: "underline",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                    New Email Address
+                  </label>
+                  <input 
+                    type="email" 
+                    placeholder="Enter your new email address (e.g. new@example.com)" 
+                    value={changeNewEmail}
+                    onChange={(e) => setChangeNewEmail(e.target.value)}
+                    required
+                    autoFocus
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
+                  <button
+                    type="submit"
+                    disabled={isChangeEmailLoading || !changeNewEmail.trim()}
+                    className="glow-text-yellow"
+                    style={{
+                      flex: 1,
+                      padding: "12px",
+                      background: isChangeEmailLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      color: "#000",
+                      border: "none",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold",
+                      fontSize: "0.95rem",
+                      cursor: isChangeEmailLoading ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "8px"
+                    }}
+                  >
+                    {isChangeEmailLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isChangeEmailLoading ? "Sending OTP..." : "Send OTP to New Email"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setChangeEmailStep("auth");
+                      setChangeEmailError("");
+                      setChangeEmailMessage("");
+                    }}
+                    style={{
+                      padding: "12px 16px",
+                      background: "transparent",
+                      color: "var(--text-muted)",
+                      border: "1px solid rgba(255,255,255,0.2)",
+                      borderRadius: "8px",
+                      fontFamily: "var(--font-outfit)",
+                      fontSize: "0.95rem",
+                      cursor: "pointer"
+                    }}
+                  >
+                    Back
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: Verify OTP sent to New Email */}
+            {changeEmailStep === "verify" && (
               <form onSubmit={handleVerifyAndConfirmEmailChange} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 {/* OTP Info Box with Timer */}
                 <div style={{
@@ -2419,6 +2578,7 @@ export default function LoginPage() {
                     value={changeEmailCode}
                     onChange={(e) => setChangeEmailCode(e.target.value.replace(/\D/g, ""))}
                     required
+                    autoFocus
                     style={{ 
                       width: "100%", 
                       padding: "12px 14px", 
@@ -2499,7 +2659,11 @@ export default function LoginPage() {
                   </button>
                   <button
                     type="button"
-                    onClick={() => setChangeEmailStep("request")}
+                    onClick={() => {
+                      setChangeEmailStep("new_email");
+                      setChangeEmailError("");
+                      setChangeEmailMessage("");
+                    }}
                     style={{
                       padding: "12px 16px",
                       background: "transparent",
