@@ -157,7 +157,7 @@ export default function LoginPage() {
     }
   }, []);
 
-  const processPostLogin = async (user: any) => {
+  const createProfileIfNotExists = async (user: any) => {
     let adminEmails = await fetchSystemSetting("admin_emails");
     if (typeof adminEmails === "string") {
       try { adminEmails = JSON.parse(adminEmails); } catch(e) {}
@@ -165,16 +165,15 @@ export default function LoginPage() {
     if (!Array.isArray(adminEmails)) adminEmails = ["heartistrichford@gmail.com"];
     const isAdmin = adminEmails.includes(user.email);
 
-    // Fetch profile
-    let { data: profileData, error: profileError } = await supabase
+    // Check if profile exists
+    let { data: profileData } = await supabase
       .from("profiles")
-      .select("*")
+      .select("id")
       .eq("id", user.id)
-      .single();
-    
-    // If profile doesn't exist yet (first login after email verification)
+      .maybeSingle();
+
     if (!profileData) {
-      const meta = user.user_metadata;
+      const meta = user.user_metadata || {};
       const newProfile = {
         id: user.id,
         first_name: isAdmin ? "Admin" : (meta.first_name || ""),
@@ -186,15 +185,42 @@ export default function LoginPage() {
         badge: isAdmin ? "Admin" : (meta.badge || "first-timer"),
         avatar_url: isAdmin ? "👑" : (meta.avatar_url || DEFAULT_AVATAR)
       };
-      
+
       const { data: insertedProfile, error: insertError } = await supabase
         .from("profiles")
         .insert(newProfile)
         .select()
         .single();
-        
-      if (insertError) throw insertError;
-      profileData = insertedProfile;
+
+      if (insertError) {
+        console.error("Error creating initial profile:", insertError);
+      }
+      return insertedProfile;
+    }
+    return profileData;
+  };
+
+  const processPostLogin = async (user: any) => {
+    let adminEmails = await fetchSystemSetting("admin_emails");
+    if (typeof adminEmails === "string") {
+      try { adminEmails = JSON.parse(adminEmails); } catch(e) {}
+    }
+    if (!Array.isArray(adminEmails)) adminEmails = ["heartistrichford@gmail.com"];
+    const isAdmin = adminEmails.includes(user.email);
+
+    // Ensure profile exists in database
+    await createProfileIfNotExists(user);
+
+    // Fetch full profile
+    let { data: profileData, error: profileError } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+    
+    if (!profileData) {
+      setError("Unable to load profile. Please try logging in again.");
+      return;
     } else if (profileData.is_banned) {
       if (profileData.banned_until) {
         const bannedUntilTime = new Date(profileData.banned_until).getTime();
@@ -412,6 +438,7 @@ export default function LoginPage() {
     
     setIsVerifying(true);
     setError("");
+    setMessage("");
     try {
       const { data, error: verifyError } = await supabase.auth.verifyOtp({
         email: regEmail.trim(),
@@ -422,8 +449,28 @@ export default function LoginPage() {
       if (verifyError) throw verifyError;
 
       if (data.user) {
-        await processPostLogin(data.user);
+        // Ensure user profile is recorded in PostgreSQL profiles table
+        await createProfileIfNotExists(data.user);
       }
+
+      // Explicitly sign out so user is not automatically logged in
+      await supabase.auth.signOut();
+      localStorage.removeItem("isHeartistLoggedIn");
+      localStorage.removeItem("activeUser");
+      localStorage.removeItem("isAdminLoggedIn");
+
+      // Pre-fill email in Login tab for a seamless experience
+      const verifiedEmail = regEmail.trim();
+      setLoginIdentifier(verifiedEmail);
+      setLoginPassword("");
+      setVerificationCode("");
+      setCodeExpiry(0);
+      setResendCooldown(0);
+
+      // Redirect to Login tab with success message
+      setActiveTab("login");
+      setMessage("Account verified successfully! Please log in with your email and password to enter.");
+      setError("");
     } catch(err: any) {
       setError(err.message || "Invalid or expired code.");
     } finally {
@@ -762,7 +809,7 @@ export default function LoginPage() {
                   ? "Verifying Code..." 
                   : codeExpiry === 0 
                     ? "Code Expired - Please Resend" 
-                    : "Verify & Enter"}
+                    : "Verify & Go to Login"}
               </button>
 
               <button
