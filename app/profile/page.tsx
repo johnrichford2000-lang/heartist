@@ -537,27 +537,27 @@ export default function ProfilePage() {
           </div>
 
           {!isAdminProfile && (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
-              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Birthday</label>
-              <input 
-                type="date" 
-                value={regBirthDate}
-                onChange={(e) => setRegBirthDate(e.target.value)}
-                style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", colorScheme: "dark", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-              />
-            </div>
-          )}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "10px", width: "100%" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Birthday</label>
+                <input 
+                  type="date" 
+                  value={regBirthDate}
+                  onChange={(e) => setRegBirthDate(e.target.value)}
+                  style={{ width: "100%", height: "44px", boxSizing: "border-box", padding: "0 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", colorScheme: "dark", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                />
+              </div>
 
-          {!isAdminProfile && (
-            <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "5px" }}>
-              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Contact Number</label>
-              <input 
-                type="tel" 
-                placeholder="09XX XXX XXXX"
-                value={regContact}
-                onChange={(e) => setRegContact(e.target.value)}
-                style={{ width: "100%", boxSizing: "border-box", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-              />
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0 }}>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>Contact Number</label>
+                <input 
+                  type="tel" 
+                  placeholder="09XX XXX XXXX"
+                  value={regContact}
+                  onChange={(e) => setRegContact(e.target.value)}
+                  style={{ width: "100%", height: "44px", boxSizing: "border-box", padding: "0 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                />
+              </div>
             </div>
           )}
 
