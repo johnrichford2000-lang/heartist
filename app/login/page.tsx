@@ -909,7 +909,7 @@ export default function LoginPage() {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
               <div>
                 <h2 style={{ fontSize: "1.4rem", fontWeight: "bold", color: "var(--neon-yellow)", margin: "0 0 4px 0" }}>
-                  📜 Heartist Code of Honor
+                  Heartist Code of Honor
                 </h2>
                 <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", margin: 0 }}>
                   Community Guidelines & Terms of Service
@@ -944,7 +944,7 @@ export default function LoginPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: "14px", fontSize: "0.88rem", lineHeight: "1.6", color: "#ddd" }}>
               <div>
                 <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
-                  1. 💛 Christ-Centered & Safe Space
+                  01. Christ-Centered & Safe Space
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
                   Panatilihing magalang, mapagpakumbaba, at nakapagpapatibay ang bawat interaksyon. Mahigpit na ipinagbabawal ang anumang pambu-bully, paninirang-puri, masasamang salita, o bastos na komento.
@@ -953,7 +953,7 @@ export default function LoginPage() {
 
               <div>
                 <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
-                  2. 🎨 Authentic & God-Honoring Creativity
+                  02. Authentic & God-Honoring Creativity
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
                   Ibahagi ang iyong mga sining, debosyon, at panalangin nang may katapatan at pagpupuri sa Diyos. Igalang ang gawa ng iba at huwag mag-post ng hindi naaangkop o hindi sa iyo nang walang pahintulot.
@@ -962,7 +962,7 @@ export default function LoginPage() {
 
               <div>
                 <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
-                  3. 🕊️ Peace, Prayer & Fellowship
+                  03. Peace, Prayer & Fellowship
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
                   Ang prayer wall at community spaces ay para sa pagtutulungan at pagdarasal sa isa&apos;t isa. Panatilihing sagrado at mapayapa ang mga talakayan.
@@ -971,7 +971,7 @@ export default function LoginPage() {
 
               <div>
                 <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
-                  4. 🔒 Privacy & Account Responsibility
+                  04. Privacy & Account Responsibility
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
                   Ingatan ang iyong password at impormasyon. Igalang din ang pribadong impormasyon at prayer requests ng iyong mga kasama sa camp.
