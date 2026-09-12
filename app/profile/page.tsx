@@ -16,6 +16,12 @@ const ROLES = [
   { id: "supporter", label: "Supporter 💖" },
 ];
 
+function formatCapitalizedName(value: string): string {
+  if (!value) return "";
+  const clean = value.replace(/[^A-Za-z\s]/g, "");
+  return clean.replace(/(?:^|\s)\S/g, (char) => char.toUpperCase());
+}
+
 export default function ProfilePage() {
   const [activeUser, setActiveUser] = useState<any>(null);
   const [isAdminProfile, setIsAdminProfile] = useState(false);
@@ -513,8 +519,8 @@ export default function ProfilePage() {
               <input 
                 type="text" 
                 value={regFirstName}
-                onChange={(e) => setRegFirstName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                onChange={(e) => setRegFirstName(formatCapitalizedName(e.target.value))}
+                style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem", textTransform: "capitalize" }}
               />
             </div>
             {!isAdminProfile && (
@@ -523,8 +529,8 @@ export default function ProfilePage() {
                           <input 
                             type="text" 
                             value={regLastName}
-                            onChange={(e) => setRegLastName(e.target.value)}
-                            style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                            onChange={(e) => setRegLastName(formatCapitalizedName(e.target.value))}
+                            style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem", textTransform: "capitalize" }}
                           />
                         </div>
             )}

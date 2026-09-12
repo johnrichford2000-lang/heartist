@@ -27,6 +27,12 @@ export function calculateAge(birthDateString: string): number {
   return Math.max(0, age);
 }
 
+export function formatCapitalizedName(value: string): string {
+  if (!value) return "";
+  const clean = value.replace(/[^A-Za-z\s]/g, "");
+  return clean.replace(/(?:^|\s)\S/g, (char) => char.toUpperCase());
+}
+
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"login" | "register" | "verify">("login");
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -360,9 +366,9 @@ export default function LoginPage() {
         password: regPassword,
         options: {
           data: {
-            first_name: regFirstName.trim(),
-            middle_name: regMiddleName.trim(),
-            last_name: regLastName.trim(),
+            first_name: formatCapitalizedName(regFirstName.trim()),
+            middle_name: formatCapitalizedName(regMiddleName.trim()),
+            last_name: formatCapitalizedName(regLastName.trim()),
             birth_date: regBirthDate,
             age: computedAge > 0 ? String(computedAge) : "",
             contact_number: regContact.trim(),
@@ -890,23 +896,23 @@ export default function LoginPage() {
                   type="text" 
                   placeholder="First Name" 
                   value={regFirstName}
-                  onChange={(e) => setRegFirstName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  onChange={(e) => setRegFirstName(formatCapitalizedName(e.target.value))}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem", textTransform: "capitalize" }}
                 />
                 <input 
                   type="text" 
                   placeholder="Middle Name (Optional)" 
                   title="Middle Name (Optional for formality)"
                   value={regMiddleName}
-                  onChange={(e) => setRegMiddleName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  onChange={(e) => setRegMiddleName(formatCapitalizedName(e.target.value))}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem", textTransform: "capitalize" }}
                 />
                 <input 
                   type="text" 
                   placeholder="Last Name" 
                   value={regLastName}
-                  onChange={(e) => setRegLastName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
-                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
+                  onChange={(e) => setRegLastName(formatCapitalizedName(e.target.value))}
+                  style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem", textTransform: "capitalize" }}
                 />
               </div>
 
