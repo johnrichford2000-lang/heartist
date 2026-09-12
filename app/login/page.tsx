@@ -72,7 +72,6 @@ export default function LoginPage() {
     !regFirstName.trim() || 
     !regLastName.trim() || 
     !regBirthDate || 
-    !regContact.trim() || 
     !regEmail.trim() || 
     !regPassword || 
     !regConfirmPassword;
@@ -279,7 +278,7 @@ export default function LoginPage() {
     if (isRegistering) return;
     setError("");
     
-    if (!regFirstName.trim() || !regLastName.trim() || !regBirthDate || !regEmail.trim() || !regContact.trim() || !regPassword || !regConfirmPassword) {
+    if (!regFirstName.trim() || !regLastName.trim() || !regBirthDate || !regEmail.trim() || !regPassword || !regConfirmPassword) {
       setError("Please fill in all required fields.");
       return;
     }
@@ -405,100 +404,180 @@ export default function LoginPage() {
       
       <div className="card" style={{ width: "100%", maxWidth: "450px", padding: "0", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,234,0,0.3)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
         
-        {/* Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
-          <button 
-            onClick={() => { setActiveTab("login"); setError(""); }}
-            style={{ 
-              flex: 1, 
-              padding: "15px", 
-              background: activeTab === "login" ? "rgba(255,234,0,0.1)" : "transparent",
-              color: activeTab === "login" ? "var(--neon-yellow)" : "var(--text-muted)",
-              border: "none",
-              borderBottom: activeTab === "login" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
-              fontFamily: "var(--font-outfit)",
-              fontWeight: "bold",
-              cursor: "pointer",
-              transition: "all 0.3s"
-            }}
-          >
-            LOGIN
-          </button>
-          <button 
-            onClick={() => { setActiveTab("register"); setError(""); }}
-            style={{ 
-              flex: 1, 
-              padding: "15px", 
-              background: activeTab === "register" ? "rgba(255,234,0,0.1)" : "transparent",
-              color: activeTab === "register" ? "var(--neon-yellow)" : "var(--text-muted)",
-              border: "none",
-              borderBottom: activeTab === "register" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
-              fontFamily: "var(--font-outfit)",
-              fontWeight: "bold",
-              cursor: "pointer",
-              transition: "all 0.3s"
-            }}
-          >
-            REGISTER
-          </button>
-        </div>
+        {/* Tabs / Header */}
+        {activeTab === "verify" ? (
+          <div style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "space-between", 
+            padding: "16px 24px", 
+            borderBottom: "1px solid rgba(255,255,255,0.1)", 
+            background: "rgba(255,234,0,0.06)" 
+          }}>
+            <span style={{ color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "0.95rem", letterSpacing: "1px" }}>
+              EMAIL VERIFICATION
+            </span>
+            <button
+              type="button"
+              onClick={() => { setActiveTab("register"); setError(""); setMessage(""); }}
+              style={{ background: "transparent", border: "none", color: "var(--text-muted)", fontSize: "0.82rem", cursor: "pointer", textDecoration: "underline", fontFamily: "var(--font-outfit)" }}
+            >
+              Back to Register
+            </button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+            <button 
+              onClick={() => { setActiveTab("login"); setError(""); }}
+              style={{ 
+                flex: 1, 
+                padding: "15px", 
+                background: activeTab === "login" ? "rgba(255,234,0,0.1)" : "transparent",
+                color: activeTab === "login" ? "var(--neon-yellow)" : "var(--text-muted)",
+                border: "none",
+                borderBottom: activeTab === "login" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
+                fontFamily: "var(--font-outfit)",
+                fontWeight: "bold",
+                cursor: "pointer",
+                transition: "all 0.3s"
+              }}
+            >
+              LOGIN
+            </button>
+            <button 
+              onClick={() => { setActiveTab("register"); setError(""); }}
+              style={{ 
+                flex: 1, 
+                padding: "15px", 
+                background: activeTab === "register" ? "rgba(255,234,0,0.1)" : "transparent",
+                color: activeTab === "register" ? "var(--neon-yellow)" : "var(--text-muted)",
+                border: "none",
+                borderBottom: activeTab === "register" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
+                fontFamily: "var(--font-outfit)",
+                fontWeight: "bold",
+                cursor: "pointer",
+                transition: "all 0.3s"
+              }}
+            >
+              REGISTER
+            </button>
+          </div>
+        )}
 
         {/* Forms Container */}
-        <div style={{ padding: "30px", overflowY: "auto", maxHeight: "65vh" }}>
-          {error && <p style={{ color: "red", textAlign: "center", fontSize: "0.85rem", marginTop: 0, marginBottom: "15px" }}>{error}</p>}
-          {message && <p style={{ color: "#00FF80", textAlign: "center", fontSize: "0.85rem", marginTop: 0, marginBottom: "15px", background: "rgba(0,255,128,0.1)", padding: "10px", borderRadius: "8px" }}>{message}</p>}
+        <div style={{ 
+          padding: activeTab === "verify" ? "28px 24px" : "30px", 
+          overflowY: activeTab === "verify" ? "visible" : "auto", 
+          maxHeight: activeTab === "verify" ? "none" : "65vh" 
+        }}>
+          {error && <p style={{ color: "#FF6B6B", textAlign: "center", fontSize: "0.85rem", marginTop: 0, marginBottom: "15px", background: "rgba(255,107,107,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(255,107,107,0.2)" }}>{error}</p>}
+          {message && <p style={{ color: "#00FF80", textAlign: "center", fontSize: "0.85rem", marginTop: 0, marginBottom: "15px", background: "rgba(0,255,128,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid rgba(0,255,128,0.2)" }}>{message}</p>}
 
           {activeTab === "verify" ? (
-            <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-              <div style={{ textAlign: "center", marginBottom: "15px" }}>
-                <p style={{ color: "var(--text-main)", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>
-                  Sent to: <strong>{regEmail}</strong>
+            <form onSubmit={handleVerifyOtp} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "20px", width: "100%" }}>
+              
+              {/* Info Box */}
+              <div style={{ 
+                width: "100%", 
+                background: "rgba(255, 234, 0, 0.04)", 
+                border: "1px solid rgba(255, 234, 0, 0.15)", 
+                borderRadius: "12px", 
+                padding: "18px 16px", 
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px"
+              }}>
+                <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: "bold" }}>
+                  Verification Code Sent
+                </span>
+                <p style={{ color: "var(--text-main)", fontSize: "1rem", margin: 0, wordBreak: "break-all", fontFamily: "var(--font-outfit)" }}>
+                  <strong style={{ color: "#fff" }}>{regEmail}</strong>
                 </p>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "5px" }}>
+                <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "4px 0 0 0", lineHeight: "1.4" }}>
                   Please check your inbox (and spam folder) for the 6-digit code.
                 </p>
               </div>
-              <input 
-                type="text" 
-                placeholder="0 0 0 0 0 0" 
-                value={verificationCode}
-                onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
-                maxLength={6}
-                style={{ textAlign: "center", letterSpacing: "15px", padding: "15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "var(--neon-yellow)", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1.8rem", fontWeight: "bold" }}
-              />
+
+              {/* 6-Digit Code Input */}
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>
+                  Enter 6-Digit Code
+                </label>
+                <input 
+                  type="text" 
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  placeholder="------" 
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
+                  maxLength={6}
+                  style={{ 
+                    width: "100%",
+                    maxWidth: "260px",
+                    textAlign: "center", 
+                    letterSpacing: "12px", 
+                    padding: "14px 10px", 
+                    borderRadius: "10px", 
+                    background: "rgba(0,0,0,0.6)", 
+                    border: verificationCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
+                    color: "var(--neon-yellow)", 
+                    outline: "none", 
+                    fontFamily: "monospace, var(--font-outfit)", 
+                    fontSize: "1.8rem", 
+                    fontWeight: "bold",
+                    boxShadow: verificationCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.25)" : "none",
+                    transition: "all 0.3s"
+                  }}
+                />
+              </div>
+
+              {/* Action Button */}
               <button 
                 type="submit"
-                disabled={isVerifying}
-                className="glow-text-yellow"
+                disabled={isVerifying || verificationCode.length !== 6}
+                className={verificationCode.length === 6 && !isVerifying ? "glow-text-yellow" : ""}
                 style={{ 
-                  marginTop: "15px", 
-                  padding: "15px", 
-                  background: isVerifying ? "rgba(255,234,0,0.2)" : "rgba(255,234,0,0.1)", 
-                  color: "var(--neon-yellow)", 
-                  border: "1px solid var(--neon-yellow)", 
+                  width: "100%",
+                  padding: "14px", 
+                  background: verificationCode.length === 6 && !isVerifying ? "rgba(255,234,0,0.12)" : "rgba(255,255,255,0.03)", 
+                  color: verificationCode.length === 6 && !isVerifying ? "var(--neon-yellow)" : "rgba(255,255,255,0.3)", 
+                  border: verificationCode.length === 6 && !isVerifying ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.15)", 
                   borderRadius: "8px", 
                   fontFamily: "var(--font-outfit)", 
                   fontWeight: "bold", 
-                  fontSize: "1.1rem", 
-                  cursor: isVerifying ? "not-allowed" : "pointer", 
-                  opacity: isVerifying ? 0.7 : 1,
+                  fontSize: "1.05rem", 
+                  cursor: verificationCode.length === 6 && !isVerifying ? "pointer" : "not-allowed", 
+                  opacity: verificationCode.length === 6 && !isVerifying ? 1 : 0.5,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
-                  transition: "all 0.3s" 
+                  transition: "all 0.3s",
+                  boxShadow: verificationCode.length === 6 && !isVerifying ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
                 }}
               >
                 {isVerifying && <span className="heartist-spinner" />}
                 {isVerifying ? "Verifying Code..." : "Verify & Enter"}
               </button>
+
               <button
                 type="button"
                 onClick={() => {
                    setActiveTab("register");
                    setMessage("");
+                   setError("");
                 }}
-                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", textDecoration: "underline", marginTop: "10px", fontFamily: "var(--font-outfit)" }}
+                style={{ 
+                  background: "transparent", 
+                  border: "none", 
+                  color: "var(--text-muted)", 
+                  cursor: "pointer", 
+                  textDecoration: "underline", 
+                  fontSize: "0.85rem", 
+                  fontFamily: "var(--font-outfit)",
+                  padding: "4px 8px"
+                }}
               >
                 Entered wrong email? Go back
               </button>
@@ -706,11 +785,11 @@ export default function LoginPage() {
                 </div>
                 <div style={{ flex: "2 1 160px", display: "flex", flexDirection: "column", gap: "4px" }}>
                   <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                    Contact Number
+                    Contact Number (Optional)
                   </label>
                   <input 
                     type="tel" 
-                    placeholder="09XX XXX XXXX" 
+                    placeholder="09XX XXX XXXX (Optional)" 
                     value={regContact}
                     onChange={(e) => setRegContact(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 16))}
                     style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
