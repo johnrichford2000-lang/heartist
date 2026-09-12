@@ -9,11 +9,34 @@ import { getCroppedImg } from "@/utils/cropImage";
 import { supabase } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
 
-const ROLES = [
+const BASE_ROLES = [
   { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
   { id: "camp-veteran", title: "Camp Veteran", emoji: "🎖️", label: "Camp Veteran 🎖️" },
   { id: "supporter", title: "Supporter", emoji: "💖", label: "Supporter 💖" },
 ];
+
+const KNOWN_SPECIAL_ROLES: Record<string, { title: string; emoji: string; label: string }> = {
+  "pastor": { title: "Pastor", emoji: "📖", label: "Pastor 📖" },
+  "camp-coordinator": { title: "Camp Coordinator", emoji: "🎯", label: "Camp Coordinator 🎯" },
+  "facilitator": { title: "Facilitator", emoji: "⭐", label: "Facilitator ⭐" },
+  "media-team": { title: "Media Team", emoji: "📸", label: "Media Team 📸" },
+  "music-team": { title: "Music Team", emoji: "🎵", label: "Music Team 🎵" },
+  "dance-ministry": { title: "Dance Ministry", emoji: "💃", label: "Dance Ministry 💃" },
+};
+
+function getRoleBadgeItem(roleId: string) {
+  if (!roleId) return BASE_ROLES[0];
+  const base = BASE_ROLES.find(r => r.id === roleId);
+  if (base) return base;
+  if (KNOWN_SPECIAL_ROLES[roleId]) {
+    return { id: roleId, ...KNOWN_SPECIAL_ROLES[roleId] };
+  }
+  const formattedTitle = roleId
+    .split("-")
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(" ");
+  return { id: roleId, title: formattedTitle, emoji: "🔰", label: `${formattedTitle} 🔰` };
+}
 
 function calculateAge(birthDateString: string): number {
   if (!birthDateString) return 0;
@@ -45,29 +68,27 @@ export default function ProfilePage() {
   const [regBirthDate, setRegBirthDate] = useState("");
   const [regEmail, setRegEmail] = useState("");
   const [regContact, setRegContact] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-  const [regBadge, setRegBadge] = useState(ROLES[0].id);
+  const [regBadge, setRegBadge] = useState(BASE_ROLES[0].id);
+  const [adminAssignedBadge, setAdminAssignedBadge] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState("");
-  const [showPwd, setShowPwd] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Forgot Password modal state
-  const [showForgotPwdModal, setShowForgotPwdModal] = useState(false);
-  const [forgotStep, setForgotStep] = useState<"request" | "verify">("request");
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [forgotCode, setForgotCode] = useState("");
-  const [forgotNewPassword, setForgotNewPassword] = useState("");
-  const [forgotConfirmPassword, setForgotConfirmPassword] = useState("");
-  const [showForgotNewPwd, setShowForgotNewPwd] = useState(false);
-  const [showForgotConfirmPwd, setShowForgotConfirmPwd] = useState(false);
-  const [isForgotLoading, setIsForgotLoading] = useState(false);
-  const [forgotError, setForgotError] = useState("");
-  const [forgotMessage, setForgotMessage] = useState("");
-  const [forgotCodeExpiry, setForgotCodeExpiry] = useState(120);
-  const [forgotResendCooldown, setForgotResendCooldown] = useState(60);
-  const [isForgotResending, setIsForgotResending] = useState(false);
+  // Password modal state (with Old Password + OTP Verification)
+  const [showPwdModal, setShowPwdModal] = useState(false);
+  const [pwdModalStep, setPwdModalStep] = useState<"request" | "verify">("request");
+  const [pwdModalMode, setPwdModalMode] = useState<"with_old" | "forgot">("with_old");
+  const [oldPassword, setOldPassword] = useState("");
+  const [pwdOtpCode, setPwdOtpCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [isPwdLoading, setIsPwdLoading] = useState(false);
+  const [pwdError, setPwdError] = useState("");
+  const [pwdMessage, setPwdMessage] = useState("");
+  const [pwdCodeExpiry, setPwdCodeExpiry] = useState(120);
+  const [pwdResendCooldown, setPwdResendCooldown] = useState(60);
+  const [isPwdResending, setIsPwdResending] = useState(false);
 
   // Change Email Address modal state
   const [showChangeEmailModal, setShowChangeEmailModal] = useState(false);
@@ -75,7 +96,6 @@ export default function ProfilePage() {
   const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
   const [changeNewEmail, setChangeNewEmail] = useState("");
   const [changeEmailCode, setChangeEmailCode] = useState("");
-  const [showChangeCurrentPwd, setShowChangeCurrentPwd] = useState(false);
   const [isChangeEmailLoading, setIsChangeEmailLoading] = useState(false);
   const [changeEmailError, setChangeEmailError] = useState("");
   const [changeEmailMessage, setChangeEmailMessage] = useState("");
@@ -98,14 +118,14 @@ export default function ProfilePage() {
   // Timers for OTP modals
   useEffect(() => {
     let timer: any;
-    if (showForgotPwdModal && forgotStep === "verify") {
+    if (showPwdModal && pwdModalStep === "verify") {
       timer = setInterval(() => {
-        setForgotCodeExpiry((prev) => (prev > 0 ? prev - 1 : 0));
-        setForgotResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+        setPwdCodeExpiry((prev) => (prev > 0 ? prev - 1 : 0));
+        setPwdResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
       }, 1000);
     }
     return () => clearInterval(timer);
-  }, [showForgotPwdModal, forgotStep]);
+  }, [showPwdModal, pwdModalStep]);
 
   useEffect(() => {
     let timer: any;
@@ -138,7 +158,7 @@ export default function ProfilePage() {
       if (cropImageSrc && croppedAreaPixels) {
         const croppedImageBase64 = await getCroppedImg(cropImageSrc, croppedAreaPixels);
         setSelectedAvatar(croppedImageBase64);
-        setCropImageSrc(null); // Close modal
+        setCropImageSrc(null);
       }
     } catch (e) {
       console.error(e);
@@ -171,6 +191,16 @@ export default function ProfilePage() {
 
         if (profile) {
           const middleName = profile.middle_name || user.user_metadata?.middle_name || "";
+          const userBadge = profile.badge || BASE_ROLES[0].id;
+          
+          // Check if user has an admin-assigned badge outside the standard 3 roles
+          const isBaseRole = BASE_ROLES.some(r => r.id === userBadge);
+          if (!isBaseRole && userBadge.toLowerCase() !== "admin") {
+            setAdminAssignedBadge(userBadge);
+          } else {
+            setAdminAssignedBadge(null);
+          }
+
           const userObj = {
             id: profile.id,
             avatar: profile.avatar_url,
@@ -194,7 +224,8 @@ export default function ProfilePage() {
           setRegBirthDate(profile.birth_date || "");
           setRegEmail(profile.email || "");
           setRegContact(profile.contact_number || "");
-          setRegBadge(isAdmin ? "Admin" : (profile.badge || ROLES[0].id));
+          setRegBadge(isAdmin ? "Admin" : userBadge);
+
           if (isAdmin) {
              const savedAvatar = profile.avatar_url;
              if (savedAvatar && savedAvatar.length > 10) {
@@ -361,7 +392,7 @@ export default function ProfilePage() {
 
       if (updateError) throw updateError;
 
-      // Update Auth metadata & password if provided
+      // Update Auth metadata
       const updateAuthPayload: any = {
         data: {
           first_name: regFirstName.trim(),
@@ -372,7 +403,6 @@ export default function ProfilePage() {
           badge: isAdminProfile ? "Admin" : regBadge
         }
       };
-      if (regPassword) updateAuthPayload.password = regPassword;
       
       const { error: authUpdateError } = await supabase.auth.updateUser(updateAuthPayload);
       if (authUpdateError) throw authUpdateError;
@@ -440,7 +470,6 @@ export default function ProfilePage() {
 
       setMessage("Profile successfully updated!");
       setTimeout(() => setMessage(""), 4000);
-      setRegPassword(""); // Clear password field
 
     } catch (err: any) {
       console.error(err);
@@ -466,89 +495,120 @@ export default function ProfilePage() {
     setIsUpdating(false);
   };
 
-  // --- FORGOT PASSWORD (OTP) HANDLERS ---
-  const handleRequestResetPassword = async (e: React.FormEvent) => {
+  // --- PASSWORD CHANGE / FORGOT PASSWORD (OTP) HANDLERS ---
+  const handleRequestPasswordOtp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isForgotLoading) return;
-    setForgotError("");
-    setForgotMessage("");
+    if (isPwdLoading) return;
+    setPwdError("");
+    setPwdMessage("");
 
-    const email = forgotEmail.trim();
-    if (!email || !email.includes("@")) {
-      setForgotError("Please enter a valid email address.");
+    const targetEmail = regEmail || activeUser?.email;
+    if (!targetEmail) {
+      setPwdError("Account email not found. Please reload the page.");
       return;
     }
 
-    setIsForgotLoading(true);
+    // If changing with old password, verify old password first
+    if (pwdModalMode === "with_old") {
+      if (!oldPassword) {
+        setPwdError("Please enter your current password.");
+        return;
+      }
+
+      setIsPwdLoading(true);
+      try {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email: targetEmail,
+          password: oldPassword
+        });
+
+        if (authError) {
+          setPwdError("Incorrect old password. If you forgot your password, click 'Forgot Password?' below.");
+          setIsPwdLoading(false);
+          return;
+        }
+      } catch (err: any) {
+        setPwdError("Verification failed. Please check your old password and try again.");
+        setIsPwdLoading(false);
+        return;
+      }
+    }
+
+    setIsPwdLoading(true);
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email);
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetEmail);
       if (resetError) throw resetError;
 
-      setForgotStep("verify");
-      setForgotCodeExpiry(120);
-      setForgotResendCooldown(60);
-      setForgotCode("");
-      setForgotMessage("A 6-digit password reset OTP code has been sent to your email. Please enter it below.");
+      setPwdModalStep("verify");
+      setPwdCodeExpiry(120);
+      setPwdResendCooldown(60);
+      setPwdOtpCode("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setPwdMessage(`A 6-digit OTP code has been sent to ${targetEmail}. Enter it below to set your new password.`);
     } catch (err: any) {
-      setForgotError(err.message || "Failed to send reset code. Please try again.");
+      setPwdError(err.message || "Failed to send reset code. Please try again.");
     } finally {
-      setIsForgotLoading(false);
+      setIsPwdLoading(false);
     }
   };
 
-  const handleResendForgotOtp = async () => {
-    if (forgotResendCooldown > 0 || isForgotResending) return;
-    setIsForgotResending(true);
-    setForgotError("");
-    setForgotMessage("");
+  const handleResendPasswordOtp = async () => {
+    if (pwdResendCooldown > 0 || isPwdResending) return;
+    setIsPwdResending(true);
+    setPwdError("");
+    setPwdMessage("");
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(forgotEmail.trim());
+      const targetEmail = regEmail || activeUser?.email;
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(targetEmail);
       if (resetError) throw resetError;
-      setForgotMessage("A new 6-digit OTP code has been sent to your email.");
-      setForgotCodeExpiry(120);
-      setForgotResendCooldown(60);
-      setForgotCode("");
+      setPwdMessage(`A new 6-digit OTP code has been sent to ${targetEmail}.`);
+      setPwdCodeExpiry(120);
+      setPwdResendCooldown(60);
+      setPwdOtpCode("");
     } catch (err: any) {
       const msg = err.message || "Failed to resend code. Please try again.";
       if (/rate limit|rate exceeded|too many requests/i.test(msg)) {
-        setForgotError("Email rate limit reached. Please wait a few minutes before requesting another code.");
+        setPwdError("Email rate limit reached. Please wait a few minutes before requesting another code.");
       } else {
-        setForgotError(msg);
+        setPwdError(msg);
       }
     } finally {
-      setIsForgotResending(false);
+      setIsPwdResending(false);
     }
   };
 
   const handleVerifyAndSetNewPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isForgotLoading) return;
-    if (forgotCodeExpiry === 0) {
-      setForgotError("The OTP code has expired. Please request a new code.");
+    if (isPwdLoading) return;
+    if (pwdCodeExpiry === 0) {
+      setPwdError("The OTP code has expired. Please request a new code.");
       return;
     }
 
-    const code = forgotCode.trim();
+    const code = pwdOtpCode.trim();
     if (!code || code.length !== 6) {
-      setForgotError("Please enter the 6-digit OTP code.");
+      setPwdError("Please enter the 6-digit OTP code.");
       return;
     }
 
-    if (forgotNewPassword.length < 6) {
-      setForgotError("New password must be at least 6 characters long.");
+    if (newPassword.length < 6) {
+      setPwdError("New password must be at least 6 characters long.");
       return;
     }
 
-    if (forgotNewPassword !== forgotConfirmPassword) {
-      setForgotError("Passwords do not match.");
+    if (newPassword !== confirmNewPassword) {
+      setPwdError("New passwords do not match.");
       return;
     }
 
-    setIsForgotLoading(true);
-    setForgotError("");
+    setIsPwdLoading(true);
+    setPwdError("");
     try {
+      const targetEmail = regEmail || activeUser?.email;
+
       const { error: verifyError } = await supabase.auth.verifyOtp({
-        email: forgotEmail.trim(),
+        email: targetEmail,
         token: code,
         type: "recovery"
       });
@@ -556,21 +616,24 @@ export default function ProfilePage() {
       if (verifyError) throw verifyError;
 
       const { error: updateError } = await supabase.auth.updateUser({
-        password: forgotNewPassword
+        password: newPassword
       });
 
       if (updateError) throw updateError;
 
-      setShowForgotPwdModal(false);
-      setForgotStep("request");
-      setRegPassword("");
-      setMessage("Password successfully reset & updated with OTP!");
+      setShowPwdModal(false);
+      setPwdModalStep("request");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setPwdOtpCode("");
+      setMessage("Password successfully updated with OTP!");
       setTimeout(() => setMessage(""), 5000);
-      setForgotError("");
+      setPwdError("");
     } catch (err: any) {
-      setForgotError(err.message || "Invalid or expired OTP code. Please try requesting a new one.");
+      setPwdError(err.message || "Invalid or expired OTP code. Please try requesting a new one.");
     } finally {
-      setIsForgotLoading(false);
+      setIsPwdLoading(false);
     }
   };
 
@@ -689,7 +752,7 @@ export default function ProfilePage() {
       const newEmail = changeNewEmail.trim();
 
       // 1. Verify OTP with Supabase Auth
-      const { data, error: verifyError } = await supabase.auth.verifyOtp({
+      const { error: verifyError } = await supabase.auth.verifyOtp({
         email: newEmail,
         token: code,
         type: "email_change"
@@ -724,6 +787,12 @@ export default function ProfilePage() {
   };
 
   if (!activeUser) return <div style={{ color: "white", padding: "50px", textAlign: "center" }}>Loading...</div>;
+
+  // Available Camper Badge options: Base roles + (current user's admin-assigned badge if not in base roles)
+  const availableBadgeOptions = [
+    ...BASE_ROLES,
+    ...(adminAssignedBadge ? [getRoleBadgeItem(adminAssignedBadge)] : [])
+  ];
 
   return (
     <main className="main-container" style={{ padding: "80px 20px", display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh" }}>
@@ -796,13 +865,8 @@ export default function ProfilePage() {
            <h2 style={{ margin: 0, color: "white", fontFamily: "var(--font-outfit)", textAlign: "center" }}>
              {activeUser.firstName}{activeUser.middleName ? ` ${activeUser.middleName}` : ""} {activeUser.lastName}
            </h2>
-            <p style={{ margin: "5px 0", color: "var(--neon-yellow)" }}>
-              {(() => {
-                const accounts: any[] = typeof window !== "undefined" ? JSON.parse(localStorage.getItem("registeredAccounts") || "[]") : [];
-                const auMatch = accounts.find((a: any) => a.firstName === activeUser?.firstName && a.lastName === activeUser?.lastName);
-                const liveBadge = auMatch?.badge || activeUser.badge || "Heartist";
-                return ROLES.find(r => r.id === liveBadge)?.label || liveBadge || "Heartist";
-              })()}
+            <p style={{ margin: "5px 0", color: "var(--neon-yellow)", fontWeight: "bold" }}>
+              {isAdminProfile ? "Admin 👑" : getRoleBadgeItem(regBadge || activeUser?.badge).label}
             </p>
            {activeUser.team && activeUser.team !== 'none' && (
              <p style={{ margin: 0, color: activeUser.team, textTransform: "capitalize", fontWeight: "bold" }}>Team {activeUser.team}</p>
@@ -985,14 +1049,21 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Camper Badge Uniform Custom Dropdown */}
+          {/* Camper Badge Uniform Custom Dropdown (Includes user's registered badge and dynamic admin-assigned badge) */}
           {!isAdminProfile && (
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", display: "block" }}>
-                Camper Badge
-              </label>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", display: "block" }}>
+                  Camper Badge
+                </label>
+                {adminAssignedBadge && (
+                  <span style={{ fontSize: "0.72rem", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
+                    Admin Assigned Role Active
+                  </span>
+                )}
+              </div>
               <CustomDropdown 
-                options={ROLES.map(r => ({
+                options={availableBadgeOptions.map(r => ({
                   value: r.id,
                   label: r.label,
                   renderLabel: (
@@ -1066,39 +1137,53 @@ export default function ProfilePage() {
             </div>
           </div>
           
-          {/* Password Field with Lower-Right "Forgot Password?" Action Link */}
+          {/* Password Field with Click to Change & Lower-Right "Forgot Password?" Action Link */}
           <div>
             <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", marginBottom: "5px", display: "block" }}>
-              New Password
+              Password
             </label>
-            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-              <input 
-                type={showPwd ? "text" : "password"} 
-                value={regPassword}
-                placeholder="Leave blank to keep current password"
-                onChange={(e) => setRegPassword(e.target.value)}
-                style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
-              />
-              <button 
-                type="button"
-                onClick={() => setShowPwd(!showPwd)}
-                style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
-              >
-                {showPwd ? "🙈" : "👁️"}
-              </button>
+            <div 
+              onClick={() => {
+                setPwdModalMode("with_old");
+                setOldPassword("");
+                setPwdModalStep("request");
+                setPwdError("");
+                setPwdMessage("");
+                setShowPwdModal(true);
+              }}
+              style={{
+                width: "100%",
+                padding: "12px 15px",
+                borderRadius: "8px",
+                background: "rgba(0,0,0,0.5)",
+                border: "1px solid rgba(255,255,255,0.2)",
+                color: "rgba(255,255,255,0.7)",
+                fontFamily: "var(--font-outfit)",
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                transition: "all 0.2s ease"
+              }}
+              onMouseOver={(e) => (e.currentTarget.style.borderColor = "var(--neon-yellow)")}
+              onMouseOut={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.2)")}
+            >
+              <span>••••••••••••</span>
+              <span style={{ fontSize: "0.82rem", color: "var(--neon-yellow)", fontWeight: "bold" }}>
+                Click to Change Password
+              </span>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
               <button
                 type="button"
                 onClick={() => {
-                  setForgotEmail(regEmail || activeUser?.email || "");
-                  setForgotStep("request");
-                  setForgotCode("");
-                  setForgotNewPassword("");
-                  setForgotConfirmPassword("");
-                  setForgotError("");
-                  setForgotMessage("");
-                  setShowForgotPwdModal(true);
+                  setPwdModalMode("forgot");
+                  setOldPassword("");
+                  setPwdModalStep("request");
+                  setPwdError("");
+                  setPwdMessage("");
+                  setShowPwdModal(true);
                 }}
                 style={{
                   background: "none",
@@ -1167,8 +1252,8 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ================= FORGOT PASSWORD (OTP) MODAL ================= */}
-      {showForgotPwdModal && (
+      {/* ================= PASSWORD CHANGE / FORGOT (OTP) MODAL ================= */}
+      {showPwdModal && (
         <div style={{
           position: "fixed",
           top: 0,
@@ -1197,10 +1282,11 @@ export default function ProfilePage() {
             <button
               type="button"
               onClick={() => {
-                setShowForgotPwdModal(false);
-                setForgotStep("request");
-                setForgotError("");
-                setForgotMessage("");
+                setShowPwdModal(false);
+                setPwdModalStep("request");
+                setOldPassword("");
+                setPwdError("");
+                setPwdMessage("");
               }}
               style={{
                 position: "absolute",
@@ -1224,10 +1310,12 @@ export default function ProfilePage() {
               marginBottom: "8px",
               textAlign: "center"
             }}>
-              {forgotStep === "request" ? "Reset Password via OTP" : "Verify OTP Code"}
+              {pwdModalStep === "request" 
+                ? (pwdModalMode === "with_old" ? "Change Password" : "Forgot Password") 
+                : "Verify OTP & Set New Password"}
             </h3>
 
-            {forgotError && (
+            {pwdError && (
               <p style={{
                 color: "#ff4d4d",
                 fontSize: "0.85rem",
@@ -1238,11 +1326,11 @@ export default function ProfilePage() {
                 margin: "10px 0 15px",
                 textAlign: "center"
               }}>
-                {forgotError}
+                {pwdError}
               </p>
             )}
 
-            {forgotMessage && (
+            {pwdMessage && (
               <p style={{
                 color: "#00FF80",
                 fontSize: "0.85rem",
@@ -1253,59 +1341,85 @@ export default function ProfilePage() {
                 margin: "10px 0 15px",
                 textAlign: "center"
               }}>
-                {forgotMessage}
+                {pwdMessage}
               </p>
             )}
 
-            {forgotStep === "request" ? (
-              /* STEP 1: Enter/Confirm Email to receive OTP */
-              <form onSubmit={handleRequestResetPassword} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {pwdModalStep === "request" ? (
+              /* STEP 1: Enter Old Password (or direct request) & Send OTP */
+              <form onSubmit={handleRequestPasswordOtp} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <p style={{ color: "var(--neon-white)", fontSize: "0.88rem", lineHeight: "1.4", margin: 0, textAlign: "center" }}>
-                  A 6-digit OTP recovery code will be sent to your registered email address.
+                  {pwdModalMode === "with_old" 
+                    ? "Enter your old password to verify your identity and send an OTP code." 
+                    : `We will send a 6-digit OTP code to ${regEmail || activeUser?.email}.`}
                 </p>
 
-                <div>
-                  <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    Registered Email Address
-                  </label>
-                  <input 
-                    type="email" 
-                    placeholder="your-email@example.com" 
-                    value={forgotEmail}
-                    onChange={(e) => setForgotEmail(e.target.value)}
-                    required
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                  />
-                </div>
+                {pwdModalMode === "with_old" && (
+                  <div>
+                    <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
+                      Enter Old Password
+                    </label>
+                    <input 
+                      type="password" 
+                      placeholder="Enter your current password" 
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      required
+                      style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    />
+                    <div style={{ textAlign: "right", marginTop: "4px" }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPwdModalMode("forgot");
+                          setOldPassword("");
+                          setPwdError("");
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "var(--neon-yellow)",
+                          fontSize: "0.78rem",
+                          fontFamily: "var(--font-outfit)",
+                          cursor: "pointer",
+                          textDecoration: "underline",
+                          opacity: 0.85
+                        }}
+                      >
+                        Forgot old password? Send OTP directly
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isForgotLoading || !forgotEmail.trim()}
+                    disabled={isPwdLoading || (pwdModalMode === "with_old" && !oldPassword)}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
                       padding: "12px",
-                      background: isForgotLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      background: (isPwdLoading || (pwdModalMode === "with_old" && !oldPassword)) ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
                       color: "#000",
                       border: "none",
                       borderRadius: "8px",
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
                       fontSize: "0.95rem",
-                      cursor: isForgotLoading ? "not-allowed" : "pointer",
+                      cursor: (isPwdLoading || (pwdModalMode === "with_old" && !oldPassword)) ? "not-allowed" : "pointer",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "8px"
                     }}
                   >
-                    {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                    {isForgotLoading ? "Sending OTP..." : "Send OTP Code"}
+                    {isPwdLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isPwdLoading ? "Sending OTP..." : "Send OTP"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setShowForgotPwdModal(false)}
+                    onClick={() => setShowPwdModal(false)}
                     style={{
                       padding: "12px 18px",
                       background: "transparent",
@@ -1322,7 +1436,7 @@ export default function ProfilePage() {
                 </div>
               </form>
             ) : (
-              /* STEP 2: Enter 6-digit OTP & New Password */
+              /* STEP 2: Enter 6-digit OTP, New Password & Confirm Password */
               <form onSubmit={handleVerifyAndSetNewPassword} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 {/* Target email and live countdown badge */}
                 <div style={{
@@ -1335,15 +1449,15 @@ export default function ProfilePage() {
                   justifyContent: "space-between"
                 }}>
                   <span style={{ fontSize: "0.82rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                    Code sent to: <strong>{forgotEmail}</strong>
+                    Code sent to: <strong>{regEmail || activeUser?.email}</strong>
                   </span>
                   <span style={{
                     fontSize: "0.8rem",
                     fontWeight: "bold",
-                    color: forgotCodeExpiry > 30 ? "var(--neon-yellow)" : "#ff4d4d",
+                    color: pwdCodeExpiry > 30 ? "var(--neon-yellow)" : "#ff4d4d",
                     fontFamily: "monospace"
                   }}>
-                    {forgotCodeExpiry > 0 ? `Expires: ${formatTime(forgotCodeExpiry)}` : "Expired"}
+                    {pwdCodeExpiry > 0 ? `Expires: ${formatTime(pwdCodeExpiry)}` : "Expired"}
                   </span>
                 </div>
 
@@ -1357,8 +1471,8 @@ export default function ProfilePage() {
                     inputMode="numeric"
                     placeholder="000000" 
                     maxLength={6}
-                    value={forgotCode}
-                    onChange={(e) => setForgotCode(e.target.value.replace(/\D/g, ""))}
+                    value={pwdOtpCode}
+                    onChange={(e) => setPwdOtpCode(e.target.value.replace(/\D/g, ""))}
                     required
                     style={{ 
                       width: "100%", 
@@ -1369,11 +1483,11 @@ export default function ProfilePage() {
                       fontWeight: "bold", 
                       borderRadius: "8px", 
                       background: "rgba(0,0,0,0.5)", 
-                      border: forgotCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
+                      border: pwdOtpCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
                       color: "var(--neon-yellow)", 
                       outline: "none", 
                       fontSize: "1.6rem",
-                      boxShadow: forgotCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
+                      boxShadow: pwdOtpCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
                     }}
                   />
                 </div>
@@ -1394,101 +1508,83 @@ export default function ProfilePage() {
                   </span>
                   <button
                     type="button"
-                    disabled={forgotResendCooldown > 0 || isForgotResending}
-                    onClick={handleResendForgotOtp}
+                    disabled={pwdResendCooldown > 0 || isPwdResending}
+                    onClick={handleResendPasswordOtp}
                     style={{
-                      background: forgotResendCooldown > 0 || isForgotResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
-                      border: forgotResendCooldown > 0 || isForgotResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
+                      background: pwdResendCooldown > 0 || isPwdResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
+                      border: pwdResendCooldown > 0 || isPwdResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
                       borderRadius: "6px",
                       padding: "5px 10px",
-                      color: forgotResendCooldown > 0 || isForgotResending ? "var(--text-muted)" : "var(--neon-yellow)",
+                      color: pwdResendCooldown > 0 || isPwdResending ? "var(--text-muted)" : "var(--neon-yellow)",
                       fontSize: "0.78rem",
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
-                      cursor: forgotResendCooldown > 0 || isForgotResending ? "not-allowed" : "pointer"
+                      cursor: pwdResendCooldown > 0 || isPwdResending ? "not-allowed" : "pointer"
                     }}
                   >
-                    {isForgotResending ? "Sending..." : forgotResendCooldown > 0 ? `Resend in ${forgotResendCooldown}s` : "Resend Code"}
+                    {isPwdResending ? "Sending..." : pwdResendCooldown > 0 ? `Resend in ${pwdResendCooldown}s` : "Resend Code"}
                   </button>
                 </div>
 
                 {/* New Password */}
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    New Password
+                    Enter New Password
                   </label>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <input 
-                      type={showForgotNewPwd ? "text" : "password"} 
-                      placeholder="At least 6 characters" 
-                      value={forgotNewPassword}
-                      onChange={(e) => setForgotNewPassword(e.target.value)}
-                      required
-                      style={{ width: "100%", padding: "12px 42px 12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowForgotNewPwd(!showForgotNewPwd)}
-                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem", padding: "4px" }}
-                    >
-                      {showForgotNewPwd ? "🙈" : "👁️"}
-                    </button>
-                  </div>
+                  <input 
+                    type="password" 
+                    placeholder="At least 6 characters" 
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
                 </div>
 
                 {/* Confirm New Password */}
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    Confirm New Password
+                    Confirm Password
                   </label>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <input 
-                      type={showForgotConfirmPwd ? "text" : "password"} 
-                      placeholder="Repeat new password" 
-                      value={forgotConfirmPassword}
-                      onChange={(e) => setForgotConfirmPassword(e.target.value)}
-                      required
-                      style={{ width: "100%", padding: "12px 42px 12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowForgotConfirmPwd(!showForgotConfirmPwd)}
-                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem", padding: "4px" }}
-                    >
-                      {showForgotConfirmPwd ? "🙈" : "👁️"}
-                    </button>
-                  </div>
+                  <input 
+                    type="password" 
+                    placeholder="Repeat new password" 
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
                 </div>
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isForgotLoading || forgotCode.length !== 6 || forgotCodeExpiry === 0}
+                    disabled={isPwdLoading || pwdOtpCode.length !== 6 || pwdCodeExpiry === 0}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
                       padding: "12px",
-                      background: isForgotLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
+                      background: isPwdLoading ? "rgba(255,234,0,0.2)" : "var(--neon-yellow)",
                       color: "#000",
                       border: "none",
                       borderRadius: "8px",
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
                       fontSize: "0.95rem",
-                      cursor: (isForgotLoading || forgotCode.length !== 6 || forgotCodeExpiry === 0) ? "not-allowed" : "pointer",
-                      opacity: (forgotCode.length !== 6 || forgotCodeExpiry === 0) ? 0.5 : 1,
+                      cursor: (isPwdLoading || pwdOtpCode.length !== 6 || pwdCodeExpiry === 0) ? "not-allowed" : "pointer",
+                      opacity: (pwdOtpCode.length !== 6 || pwdCodeExpiry === 0) ? 0.5 : 1,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       gap: "8px"
                     }}
                   >
-                    {isForgotLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
-                    {isForgotLoading ? "Verifying..." : "Verify OTP & Reset"}
+                    {isPwdLoading && <span className="heartist-spinner" style={{ borderColor: "#000", borderTopColor: "transparent" }} />}
+                    {isPwdLoading ? "Verifying..." : "Verify OTP & Update Password"}
                   </button>
                   <button
                     type="button"
-                    onClick={() => setForgotStep("request")}
+                    onClick={() => setPwdModalStep("request")}
                     style={{
                       padding: "12px 16px",
                       background: "transparent",
@@ -1603,7 +1699,7 @@ export default function ProfilePage() {
               /* STEP 1: Verify Password & Enter New Email */
               <form onSubmit={handleRequestChangeEmail} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <p style={{ color: "var(--neon-white)", fontSize: "0.88rem", lineHeight: "1.4", margin: 0, textAlign: "center" }}>
-                  Confirm your password and enter your new email to receive a 6-digit verification code.
+                  Confirm your current password and enter your new email to receive a 6-digit verification code.
                 </p>
 
                 {/* Current Email Display */}
@@ -1619,28 +1715,19 @@ export default function ProfilePage() {
                   />
                 </div>
 
-                {/* Current Password */}
+                {/* Current Password (No emoji buttons) */}
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
                     Current Password
                   </label>
-                  <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
-                    <input 
-                      type={showChangeCurrentPwd ? "text" : "password"} 
-                      placeholder="Enter your current password" 
-                      value={changeCurrentPassword}
-                      onChange={(e) => setChangeCurrentPassword(e.target.value)}
-                      required
-                      style={{ width: "100%", padding: "12px 42px 12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
-                    />
-                    <button 
-                      type="button"
-                      onClick={() => setShowChangeCurrentPwd(!showChangeCurrentPwd)}
-                      style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem", padding: "4px" }}
-                    >
-                      {showChangeCurrentPwd ? "🙈" : "👁️"}
-                    </button>
-                  </div>
+                  <input 
+                    type="password" 
+                    placeholder="Enter your current password" 
+                    value={changeCurrentPassword}
+                    onChange={(e) => setChangeCurrentPassword(e.target.value)}
+                    required
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                  />
                 </div>
 
                 {/* New Email Address */}
