@@ -473,9 +473,6 @@ export default function ProfilePage() {
             ) : (
                 <img src="https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg" alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
             )}
-            <div style={{ position: "absolute", bottom: "-5px", right: "-5px", background: "var(--neon-yellow)", borderRadius: "50%", padding: "5px", color: "black", fontSize: "0.8rem" }}>
-                {"\u270F\uFE0F"}
-            </div>
         </div>
         <input 
             type="file" 

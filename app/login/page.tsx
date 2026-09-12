@@ -9,9 +9,9 @@ import CustomDropdown from "@/components/CustomDropdown";
 
 const DEFAULT_AVATAR = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
 const ROLES = [
-  { id: "first-timer", label: "First-timer 🐣" },
-  { id: "camp-veteran", label: "Camp Veteran 🎖️" },
-  { id: "supporter", label: "Supporter 💖" },
+  { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
+  { id: "camp-veteran", title: "Camp Veteran", emoji: "🎖️", label: "Camp Veteran 🎖️" },
+  { id: "supporter", title: "Supporter", emoji: "💖", label: "Supporter 💖" },
 ];
 
 export default function LoginPage() {
@@ -494,12 +494,13 @@ export default function LoginPage() {
                       right: "0", 
                       background: "rgba(0,0,0,0.65)", 
                       color: "var(--neon-yellow)", 
-                      fontSize: "0.65rem", 
+                      fontSize: "0.68rem", 
                       padding: "2px 0",
                       textAlign: "center",
-                      fontFamily: "var(--font-outfit)"
+                      fontFamily: "var(--font-outfit)",
+                      fontWeight: "bold"
                     }}>
-                      Edit ✏️
+                      Edit
                     </div>
                   </div>
 
@@ -511,23 +512,34 @@ export default function LoginPage() {
                     onChange={handleAvatarUpload} 
                   />
 
-                  {selectedAvatar !== DEFAULT_AVATAR ? (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedAvatar(DEFAULT_AVATAR)}
-                      style={{
-                        background: "none",
-                        border: "1px solid rgba(255,255,255,0.2)",
-                        borderRadius: "12px",
-                        color: "var(--text-muted)",
-                        fontSize: "0.75rem",
-                        padding: "2px 8px",
-                        cursor: "pointer",
-                        fontFamily: "var(--font-outfit)"
-                      }}
-                    >
-                      Revert to Default Picture
-                    </button>
+                  {selectedAvatar && selectedAvatar !== DEFAULT_AVATAR ? (
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "5px", marginTop: "4px" }}>
+                      <p style={{ color: "var(--text-muted)", fontSize: "0.75rem", margin: 0, fontFamily: "var(--font-outfit)" }}>
+                        Revert to Default:
+                      </p>
+                      <div 
+                        onClick={() => setSelectedAvatar(DEFAULT_AVATAR)}
+                        style={{ 
+                          width: "45px", 
+                          height: "45px", 
+                          borderRadius: "50%", 
+                          cursor: "pointer", 
+                          border: "1px solid rgba(255,255,255,0.2)", 
+                          overflow: "hidden", 
+                          transition: "transform 0.2s",
+                          boxShadow: "0 0 10px rgba(0,0,0,0.5)"
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.1)"}
+                        onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+                        title="Revert to Default Profile Picture"
+                      >
+                        <img 
+                          src={DEFAULT_AVATAR} 
+                          alt="Default Avatar" 
+                          style={{ width: "100%", height: "100%", objectFit: "cover" }} 
+                        />
+                      </div>
+                    </div>
                   ) : (
                     <span style={{ color: "var(--text-muted)", fontSize: "0.75rem", fontFamily: "var(--font-outfit)" }}>
                       Default Profile Picture
@@ -540,14 +552,14 @@ export default function LoginPage() {
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <input 
                   type="text" 
-                  placeholder="First Name *" 
+                  placeholder="First Name" 
                   value={regFirstName}
                   onChange={(e) => setRegFirstName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
                   style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
                 <input 
                   type="text" 
-                  placeholder="Middle Name" 
+                  placeholder="Middle Name (Optional)" 
                   title="Middle Name (Optional for formality)"
                   value={regMiddleName}
                   onChange={(e) => setRegMiddleName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
@@ -555,7 +567,7 @@ export default function LoginPage() {
                 />
                 <input 
                   type="text" 
-                  placeholder="Last Name *" 
+                  placeholder="Last Name" 
                   value={regLastName}
                   onChange={(e) => setRegLastName(e.target.value.replace(/[^A-Za-z\s]/g, ''))}
                   style={{ flex: "1 1 120px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -565,14 +577,14 @@ export default function LoginPage() {
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
                 <input 
                   type="date" 
-                  title="Birthday *"
+                  title="Birthday"
                   value={regBirthDate}
                   onChange={(e) => setRegBirthDate(e.target.value)}
                   style={{ flex: "1 1 140px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
                 />
                 <input 
                   type="tel" 
-                  placeholder="Contact Number *" 
+                  placeholder="Contact Number" 
                   value={regContact}
                   onChange={(e) => setRegContact(e.target.value)}
                   style={{ flex: "2 1 160px", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -581,7 +593,7 @@ export default function LoginPage() {
 
               <input 
                 type="email" 
-                placeholder="Email Address *" 
+                placeholder="Email Address" 
                 value={regEmail}
                 onChange={(e) => setRegEmail(e.target.value)}
                 style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -597,13 +609,11 @@ export default function LoginPage() {
                     value: r.id,
                     label: r.label,
                     renderLabel: (
-                      <span>
-                        <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold", marginRight: "6px" }}>
-                          {r.label.split(" ")[0]}
+                      <span style={{ fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
+                        <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold", marginRight: "8px" }}>
+                          {r.title}
                         </strong>
-                        <span style={{ color: "rgba(255,255,255,0.9)" }}>
-                          {r.label.split(" ").slice(1).join(" ")}
-                        </span>
+                        <span>{r.emoji}</span>
                       </span>
                     )
                   }))}
@@ -621,7 +631,7 @@ export default function LoginPage() {
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <input 
                   type={showRegPwd ? "text" : "password"} 
-                  placeholder="Create Password (min. 6 chars) *" 
+                  placeholder="Create Password (min. 6 chars)" 
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -640,7 +650,7 @@ export default function LoginPage() {
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <input 
                   type={showRegConfirmPwd ? "text" : "password"} 
-                  placeholder="Confirm Password *" 
+                  placeholder="Confirm Password" 
                   value={regConfirmPassword}
                   onChange={(e) => setRegConfirmPassword(e.target.value)}
                   style={{ 
