@@ -41,6 +41,24 @@ export default function LoginPage() {
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
 
+  // Verification timers (2-minute code expiration, 1-minute resend cooldown)
+  const [codeExpiry, setCodeExpiry] = useState(120);
+  const [resendCooldown, setResendCooldown] = useState(60);
+  const [isResending, setIsResending] = useState(false);
+
+  useEffect(() => {
+    let timer: any = null;
+    if (activeTab === "verify") {
+      timer = setInterval(() => {
+        setCodeExpiry((prev) => (prev > 0 ? prev - 1 : 0));
+        setResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [activeTab]);
+
   useEffect(() => {
     const saved = localStorage.getItem("registeredAccounts");
     if (saved) {
@@ -357,6 +375,9 @@ export default function LoginPage() {
       if (authError) throw authError;
 
       setActiveTab("verify");
+      setCodeExpiry(120);
+      setResendCooldown(60);
+      setVerificationCode("");
       setMessage("Success! A 6-digit verification code has been sent to your email. Please enter it below.");
 
     } catch (err: any) {
@@ -369,6 +390,10 @@ export default function LoginPage() {
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isVerifying) return;
+    if (codeExpiry === 0) {
+      setError("The verification code has expired. Please check the resend box below to get a new code.");
+      return;
+    }
     if (!verificationCode || verificationCode.length !== 6) {
       setError("Please enter a valid 6-digit code.");
       return;
@@ -392,6 +417,28 @@ export default function LoginPage() {
       setError(err.message || "Invalid or expired code.");
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (resendCooldown > 0 || isResending) return;
+    setIsResending(true);
+    setError("");
+    setMessage("");
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: regEmail.trim(),
+      });
+      if (resendError) throw resendError;
+      setMessage("A new 6-digit verification code has been sent to your email.");
+      setCodeExpiry(120);
+      setResendCooldown(60);
+      setVerificationCode("");
+    } catch (err: any) {
+      setError(err.message || "Failed to resend code. Please try again.");
+    } finally {
+      setIsResending(false);
     }
   };
 
@@ -428,13 +475,16 @@ export default function LoginPage() {
         ) : (
           <div style={{ display: "flex", borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
             <button 
+              type="button"
               onClick={() => { setActiveTab("login"); setError(""); }}
               style={{ 
                 flex: 1, 
                 padding: "15px", 
                 background: activeTab === "login" ? "rgba(255,234,0,0.1)" : "transparent",
                 color: activeTab === "login" ? "var(--neon-yellow)" : "var(--text-muted)",
-                border: "none",
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
                 borderBottom: activeTab === "login" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
                 fontFamily: "var(--font-outfit)",
                 fontWeight: "bold",
@@ -445,13 +495,16 @@ export default function LoginPage() {
               LOGIN
             </button>
             <button 
+              type="button"
               onClick={() => { setActiveTab("register"); setError(""); }}
               style={{ 
                 flex: 1, 
                 padding: "15px", 
                 background: activeTab === "register" ? "rgba(255,234,0,0.1)" : "transparent",
                 color: activeTab === "register" ? "var(--neon-yellow)" : "var(--text-muted)",
-                border: "none",
+                borderTop: "none",
+                borderLeft: "none",
+                borderRight: "none",
                 borderBottom: activeTab === "register" ? "2px solid var(--neon-yellow)" : "2px solid transparent",
                 fontFamily: "var(--font-outfit)",
                 fontWeight: "bold",
@@ -486,16 +539,38 @@ export default function LoginPage() {
                 textAlign: "center",
                 display: "flex",
                 flexDirection: "column",
-                gap: "6px"
+                gap: "8px"
               }}>
-                <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: "bold" }}>
-                  Verification Code Sent
-                </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                  <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: "bold" }}>
+                    Verification Code Sent
+                  </span>
+                  <span style={{ 
+                    fontSize: "0.78rem", 
+                    color: codeExpiry === 0 ? "#FF6B6B" : codeExpiry <= 30 ? "#FFA500" : "var(--neon-yellow)", 
+                    fontFamily: "monospace, var(--font-outfit)", 
+                    fontWeight: "bold",
+                    background: "rgba(0, 0, 0, 0.4)",
+                    padding: "2px 8px",
+                    borderRadius: "4px",
+                    border: codeExpiry === 0 ? "1px solid rgba(255, 107, 107, 0.4)" : "1px solid rgba(255, 234, 0, 0.3)"
+                  }}>
+                    {codeExpiry > 0 ? (
+                      `Expires: ${Math.floor(codeExpiry / 60).toString().padStart(2, "0")}:${(codeExpiry % 60).toString().padStart(2, "0")}`
+                    ) : (
+                      "Expired"
+                    )}
+                  </span>
+                </div>
+
                 <p style={{ color: "var(--text-main)", fontSize: "1rem", margin: 0, wordBreak: "break-all", fontFamily: "var(--font-outfit)" }}>
                   <strong style={{ color: "#fff" }}>{regEmail}</strong>
                 </p>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "4px 0 0 0", lineHeight: "1.4" }}>
-                  Please check your inbox (and spam folder) for the 6-digit code.
+                <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "2px 0 0 0", lineHeight: "1.4" }}>
+                  {codeExpiry > 0 
+                    ? "Please check your inbox (and spam folder) for the 6-digit code."
+                    : "The 6-digit code has expired. Check the resend box below to request a new code."
+                  }
                 </p>
               </div>
 
@@ -510,6 +585,7 @@ export default function LoginPage() {
                   autoComplete="one-time-code"
                   placeholder="------" 
                   value={verificationCode}
+                  disabled={codeExpiry === 0}
                   onChange={(e) => setVerificationCode(e.target.value.replace(/[^0-9]/g, '').slice(0, 6))}
                   maxLength={6}
                   style={{ 
@@ -519,46 +595,110 @@ export default function LoginPage() {
                     letterSpacing: "12px", 
                     padding: "14px 10px", 
                     borderRadius: "10px", 
-                    background: "rgba(0,0,0,0.6)", 
-                    border: verificationCode.length === 6 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.25)", 
-                    color: "var(--neon-yellow)", 
+                    background: codeExpiry === 0 ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.6)", 
+                    border: codeExpiry === 0 
+                      ? "1px solid rgba(255,107,107,0.3)" 
+                      : verificationCode.length === 6 
+                        ? "1px solid var(--neon-yellow)" 
+                        : "1px solid rgba(255,255,255,0.25)", 
+                    color: codeExpiry === 0 ? "#FF6B6B" : "var(--neon-yellow)", 
                     outline: "none", 
                     fontFamily: "monospace, var(--font-outfit)", 
                     fontSize: "1.8rem", 
                     fontWeight: "bold",
-                    boxShadow: verificationCode.length === 6 ? "0 0 15px rgba(255, 234, 0, 0.25)" : "none",
+                    boxShadow: verificationCode.length === 6 && codeExpiry > 0 ? "0 0 15px rgba(255, 234, 0, 0.25)" : "none",
                     transition: "all 0.3s"
                   }}
                 />
               </div>
 
+              {/* Resend Checkbox Box */}
+              <div style={{ 
+                width: "100%", 
+                background: "rgba(255, 255, 255, 0.03)", 
+                border: "1px solid rgba(255, 255, 255, 0.1)", 
+                borderRadius: "8px", 
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "10px"
+              }}>
+                <label 
+                  htmlFor="resend-checkbox" 
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "10px", 
+                    cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
+                    fontSize: "0.85rem",
+                    color: resendCooldown > 0 || isResending ? "var(--text-muted)" : "var(--neon-white)",
+                    fontFamily: "var(--font-outfit)",
+                    userSelect: "none",
+                    flex: 1
+                  }}
+                >
+                  <input 
+                    type="checkbox"
+                    id="resend-checkbox"
+                    checked={isResending}
+                    disabled={resendCooldown > 0 || isResending}
+                    onChange={() => {
+                      if (resendCooldown === 0 && !isResending) {
+                        handleResendOtp();
+                      }
+                    }}
+                    style={{ 
+                      width: "16px", 
+                      height: "16px", 
+                      cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
+                      accentColor: "var(--neon-yellow)"
+                    }}
+                  />
+                  <span>Didn&apos;t get a code? Resend</span>
+                </label>
+
+                <span style={{ 
+                  fontSize: "0.8rem", 
+                  fontFamily: "monospace, var(--font-outfit)", 
+                  color: resendCooldown > 0 ? "var(--text-muted)" : "var(--neon-yellow)",
+                  fontWeight: "bold"
+                }}>
+                  {isResending ? "Sending..." : resendCooldown > 0 ? `${resendCooldown}s` : "Available"}
+                </span>
+              </div>
+
               {/* Action Button */}
               <button 
                 type="submit"
-                disabled={isVerifying || verificationCode.length !== 6}
-                className={verificationCode.length === 6 && !isVerifying ? "glow-text-yellow" : ""}
+                disabled={isVerifying || verificationCode.length !== 6 || codeExpiry === 0}
+                className={verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "glow-text-yellow" : ""}
                 style={{ 
                   width: "100%",
                   padding: "14px", 
-                  background: verificationCode.length === 6 && !isVerifying ? "rgba(255,234,0,0.12)" : "rgba(255,255,255,0.03)", 
-                  color: verificationCode.length === 6 && !isVerifying ? "var(--neon-yellow)" : "rgba(255,255,255,0.3)", 
-                  border: verificationCode.length === 6 && !isVerifying ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.15)", 
+                  background: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "rgba(255,234,0,0.12)" : "rgba(255,255,255,0.03)", 
+                  color: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "var(--neon-yellow)" : "rgba(255,255,255,0.3)", 
+                  border: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.15)", 
                   borderRadius: "8px", 
                   fontFamily: "var(--font-outfit)", 
                   fontWeight: "bold", 
                   fontSize: "1.05rem", 
-                  cursor: verificationCode.length === 6 && !isVerifying ? "pointer" : "not-allowed", 
-                  opacity: verificationCode.length === 6 && !isVerifying ? 1 : 0.5,
+                  cursor: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "pointer" : "not-allowed", 
+                  opacity: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? 1 : 0.5,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
                   transition: "all 0.3s",
-                  boxShadow: verificationCode.length === 6 && !isVerifying ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
+                  boxShadow: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
                 }}
               >
                 {isVerifying && <span className="heartist-spinner" />}
-                {isVerifying ? "Verifying Code..." : "Verify & Enter"}
+                {isVerifying 
+                  ? "Verifying Code..." 
+                  : codeExpiry === 0 
+                    ? "Code Expired - Please Resend" 
+                    : "Verify & Enter"}
               </button>
 
               <button
@@ -579,7 +719,7 @@ export default function LoginPage() {
                   padding: "4px 8px"
                 }}
               >
-                Entered wrong email? Go back
+                Wrong email? Go back to edit
               </button>
             </form>
           ) : activeTab === "login" ? (
