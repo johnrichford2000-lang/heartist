@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
-import { supabase } from "@/lib/supabase";
+import { supabase, createEphemeralClient } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
 import CustomDropdown from "@/components/CustomDropdown";
 
@@ -392,51 +392,94 @@ export default function LoginPage() {
           return;
         }
 
+        const inputName = emailToUse;
+        const candidateEmails: string[] = [];
+
         // 1. Exact match on first_name (e.g. "John Richford" or "John")
-        let { data: profiles } = await supabase
+        const { data: exactMatches } = await supabase
           .from("profiles")
           .select("email, first_name")
-          .ilike("first_name", emailToUse)
-          .limit(1);
+          .ilike("first_name", inputName);
 
-        // 2. If not found and user typed only the first word (e.g. "John" while registered as "John Richford")
-        if ((!profiles || profiles.length === 0) && !emailToUse.includes(" ")) {
-          const { data: prefixProfiles } = await supabase
+        if (exactMatches) {
+          for (const m of exactMatches) {
+            if (m.email && !candidateEmails.includes(m.email)) {
+              candidateEmails.push(m.email);
+            }
+          }
+        }
+
+        // 2. Prefix match if user typed single word (e.g. "John" while registered as "John Richford")
+        if (!inputName.includes(" ")) {
+          const { data: prefixMatches } = await supabase
             .from("profiles")
             .select("email, first_name")
-            .ilike("first_name", `${emailToUse} %`)
-            .limit(1);
-          if (prefixProfiles && prefixProfiles.length > 0) {
-            profiles = prefixProfiles;
+            .ilike("first_name", `${inputName} %`);
+
+          if (prefixMatches) {
+            for (const m of prefixMatches) {
+              if (m.email && !candidateEmails.includes(m.email)) {
+                candidateEmails.push(m.email);
+              }
+            }
           }
         }
 
         // 3. Fallback: Check if user typed full name (e.g. "John Richford Lozano")
-        if (!profiles || profiles.length === 0) {
-          const nameParts = emailToUse.split(/\s+/);
-          if (nameParts.length >= 2) {
-            const possibleFirst = nameParts.slice(0, -1).join(" ");
-            const possibleLast = nameParts[nameParts.length - 1];
-            const { data: fullProfiles } = await supabase
-              .from("profiles")
-              .select("email, first_name, last_name")
-              .ilike("first_name", possibleFirst)
-              .ilike("last_name", possibleLast)
-              .limit(1);
-            if (fullProfiles && fullProfiles.length > 0) {
-              profiles = fullProfiles;
+        const nameParts = inputName.split(/\s+/);
+        if (nameParts.length >= 2) {
+          const possibleFirst = nameParts.slice(0, -1).join(" ");
+          const possibleLast = nameParts[nameParts.length - 1];
+          const { data: fullProfiles } = await supabase
+            .from("profiles")
+            .select("email, first_name, last_name")
+            .ilike("first_name", possibleFirst)
+            .ilike("last_name", possibleLast);
+
+          if (fullProfiles) {
+            for (const m of fullProfiles) {
+              if (m.email && !candidateEmails.includes(m.email)) {
+                candidateEmails.push(m.email);
+              }
             }
           }
         }
-          
-        const profile = profiles && profiles.length > 0 ? profiles[0] : null;
-          
-        if (profile && profile.email) {
-          emailToUse = profile.email;
-        } else {
+
+        if (candidateEmails.length === 0) {
           setError("User not found with that First Name or Name.");
           return;
         }
+
+        // Authenticate candidate profiles in parallel using ephemeral client to identify correct account
+        const authResults = await Promise.all(
+          candidateEmails.map(async (candEmail) => {
+            try {
+              const ephem = createEphemeralClient();
+              const { data: testAuth, error: testAuthError } = await ephem.auth.signInWithPassword({
+                email: candEmail,
+                password: loginPassword,
+              });
+              if (testAuth?.user && !testAuthError) {
+                return candEmail;
+              }
+            } catch (e) {}
+            return null;
+          })
+        );
+
+        const matchedEmails = authResults.filter((e): e is string => Boolean(e));
+
+        if (matchedEmails.length === 0) {
+          setError("Account not found or incorrect password.");
+          return;
+        }
+
+        if (matchedEmails.length > 1) {
+          setError("Multiple accounts detected with this name and password. Please log in using your registered email address.");
+          return;
+        }
+
+        emailToUse = matchedEmails[0];
       }
 
       const { data, error: authError } = await supabase.auth.signInWithPassword({
@@ -524,6 +567,78 @@ export default function LoginPage() {
       if (existingUser) {
         setError("This email is already registered. Please use a different email or log in.");
         return;
+      }
+
+      // First Come, First Served policy for duplicate First Names:
+      // Verify if any existing user with the same First Name already uses this exact password.
+      const formattedRegFirst = formatCapitalizedName(regFirstName.trim());
+      const candidateCheckEmails: string[] = [];
+
+      // 1. Exact match on first_name
+      const { data: nameMatches } = await supabase
+        .from("profiles")
+        .select("email, first_name")
+        .ilike("first_name", formattedRegFirst);
+
+      if (nameMatches) {
+        for (const m of nameMatches) {
+          if (m.email && m.email.toLowerCase() !== regEmail.trim().toLowerCase() && !candidateCheckEmails.includes(m.email)) {
+            candidateCheckEmails.push(m.email);
+          }
+        }
+      }
+
+      // 2. Prefix match if single-word first name (e.g. registering "John" while "John Richford" exists)
+      if (!formattedRegFirst.includes(" ")) {
+        const { data: prefixMatches } = await supabase
+          .from("profiles")
+          .select("email, first_name")
+          .ilike("first_name", `${formattedRegFirst} %`);
+
+        if (prefixMatches) {
+          for (const m of prefixMatches) {
+            if (m.email && m.email.toLowerCase() !== regEmail.trim().toLowerCase() && !candidateCheckEmails.includes(m.email)) {
+              candidateCheckEmails.push(m.email);
+            }
+          }
+        }
+      } else {
+        // Multi-word first name (e.g. registering "John Richford" while "John" exists)
+        const firstWord = formattedRegFirst.split(/\s+/)[0];
+        const { data: firstWordMatches } = await supabase
+          .from("profiles")
+          .select("email, first_name")
+          .ilike("first_name", firstWord);
+
+        if (firstWordMatches) {
+          for (const m of firstWordMatches) {
+            if (m.email && m.email.toLowerCase() !== regEmail.trim().toLowerCase() && !candidateCheckEmails.includes(m.email)) {
+              candidateCheckEmails.push(m.email);
+            }
+          }
+        }
+      }
+
+      if (candidateCheckEmails.length > 0) {
+        const conflictResults = await Promise.all(
+          candidateCheckEmails.map(async (candEmail) => {
+            try {
+              const ephem = createEphemeralClient();
+              const { data: testAuth, error: testAuthError } = await ephem.auth.signInWithPassword({
+                email: candEmail,
+                password: regPassword,
+              });
+              return Boolean(testAuth?.user && !testAuthError);
+            } catch (e) {
+              return false;
+            }
+          })
+        );
+
+        if (conflictResults.some(Boolean)) {
+          setError("Your password is invalid. Please change your password.");
+          return;
+        }
       }
 
       const computedAge = calculateAge(regBirthDate);
@@ -748,6 +863,50 @@ export default function LoginPage() {
       });
 
       if (verifyError) throw verifyError;
+
+      // Check conflict for new password against other users with the same First Name
+      if (verifyData?.user) {
+        const { data: myProfile } = await supabase
+          .from("profiles")
+          .select("first_name")
+          .eq("id", verifyData.user.id)
+          .maybeSingle();
+
+        const myFirstName = myProfile?.first_name || verifyData.user.user_metadata?.first_name;
+        if (myFirstName) {
+          const formattedMyFirst = formatCapitalizedName(myFirstName.trim());
+          const { data: conflictProfiles } = await supabase
+            .from("profiles")
+            .select("email")
+            .ilike("first_name", formattedMyFirst);
+
+          const candidateResetEmails = (conflictProfiles || [])
+            .map((p) => p.email)
+            .filter((e) => e && e.toLowerCase() !== forgotEmail.trim().toLowerCase());
+
+          if (candidateResetEmails.length > 0) {
+            const conflictResults = await Promise.all(
+              candidateResetEmails.map(async (candEmail) => {
+                try {
+                  const ephem = createEphemeralClient();
+                  const { data: testAuth, error: testAuthError } = await ephem.auth.signInWithPassword({
+                    email: candEmail,
+                    password: forgotNewPassword,
+                  });
+                  return Boolean(testAuth?.user && !testAuthError);
+                } catch (e) {
+                  return false;
+                }
+              })
+            );
+
+            if (conflictResults.some(Boolean)) {
+              setForgotError("Your password is invalid. Please change your password.");
+              return;
+            }
+          }
+        }
+      }
 
       // 2. Update to new password
       const { error: updateError } = await supabase.auth.updateUser({
