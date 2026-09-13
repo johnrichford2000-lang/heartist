@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
+import BadgeIcon from "@/components/BadgeIcon";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
@@ -219,6 +220,42 @@ export default function NotificationsPage() {
       };
 
       fetchInbox();
+
+      // Realtime subscription for instant updates on incoming notifications
+      const notifsSub = supabase
+        .channel(`notifications_inbox_${currentUserObj.id || currentUser}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+          },
+          () => {
+            fetchInbox();
+          }
+        )
+        .subscribe();
+
+      const broadcastSub = supabase
+        .channel("public-notifications")
+        .on("broadcast", { event: "new_notif" }, () => {
+          fetchInbox();
+        })
+        .subscribe();
+
+      const handleLiveEvent = () => {
+        fetchInbox();
+      };
+      window.addEventListener("storage", handleLiveEvent);
+      window.addEventListener("badge_updated", handleLiveEvent);
+
+      return () => {
+        supabase.removeChannel(notifsSub);
+        supabase.removeChannel(broadcastSub);
+        window.removeEventListener("storage", handleLiveEvent);
+        window.removeEventListener("badge_updated", handleLiveEvent);
+      };
     }
   }, []);
   const formatTimeAgo = (timestampMs: number) => {
@@ -243,38 +280,8 @@ export default function NotificationsPage() {
 };
 
   const getRoleIcon = (role: string) => {
-    switch (role?.toLowerCase()) {
-      case "first-timer":
-      case "first timer":
-        return "🐣";
-      case "camp-veteran":
-      case "camp veteran":
-        return "🎖️";
-      case "supporter":
-        return "💖";
-      case "pastor":
-        return "📖";
-      case "camp-coordinator":
-      case "camp coordinator":
-        return "🎯";
-      case "facilitator":
-        return "⭐";
-      case "media-team":
-      case "media team":
-        return "📸";
-      case "music-team":
-      case "music team":
-        return "🎵";
-      case "dance-ministry":
-      case "dance ministry":
-        return "💃";
-      case "anonymous":
-        return "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
-      case "admin":
-        return "👑";
-      default:
-        return "";
-    }
+    if (!role) return null;
+    return <BadgeIcon badge={role} size={14} />;
   };
 
   const getUserDetails = (username: string) => {
@@ -548,11 +555,28 @@ export default function NotificationsPage() {
                               <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
                               <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
                             </svg>
-                          ) : notif.type?.toUpperCase() === "PENALTY" ? "🚫" 
-                          : notif.type?.toUpperCase() === "PENALTY LIFTED" ? "🔓"
-                          : notif.type?.toUpperCase() === "UNBLOCKED" ? "🔓"
-                          : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE") || notif.type?.toUpperCase() === "WARNING" ? "⚠️" 
-                          : "📥"}
+                          ) : notif.type?.toUpperCase() === "PENALTY" ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#EF4444" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="12" cy="12" r="10" />
+                              <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                            </svg>
+                          ) : notif.type?.toUpperCase() === "PENALTY LIFTED" || notif.type?.toUpperCase() === "UNBLOCKED" ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22C55E" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                              <path d="M7 11V7a5 5 0 0 1 9.9-1" />
+                            </svg>
+                          ) : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE") || notif.type?.toUpperCase() === "WARNING" ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#F59E0B" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                              <line x1="12" y1="9" x2="12" y2="13" />
+                              <line x1="12" y1="17" x2="12.01" y2="17" />
+                            </svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#60A5FA" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                              <polyline points="22 12 16 12 14 15 10 15 8 12 2 12" />
+                              <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+                            </svg>
+                          )}
                         </span>
                       </div>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -566,18 +590,18 @@ export default function NotificationsPage() {
                           {notif.type === "GET_INVOLVED"
                             ? <span>Heartist Team replied to your Get Involved submission: <span style={{ fontWeight: "normal", color: "#FDE68A" }}>{notif.content}</span></span>
                             : notif.type?.toUpperCase() === "WARNING" 
-     ? <span>Admin 👑 gave you a warning: <span style={{ fontWeight: "normal" }}>{notif.content || "regarding your post or behavior."}</span></span>
-     : notif.type?.toUpperCase() === "PENALTY"
-     ? <span>Admin 👑 placed your account on penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
-     : notif.type?.toUpperCase() === "PENALTY LIFTED"
-     ? <span>Admin 👑 lifted your penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
-     : notif.type?.toUpperCase() === "UNBLOCKED"
-     ? <span>Admin 👑 unblocked your account: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
-     : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE")
-     ? <span>Admin 👑 deleted your post/comment: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
-     : notif.type?.toUpperCase().includes("REPORT") || notif.type?.toUpperCase().includes("MODERATION")
-     ? <span>Admin 👑 sent an update on your report/appeal: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
-     : <span>Admin 👑 sent a message: <span style={{ fontWeight: "normal" }}>{notif.content || `New Message in ${notif.filterCategory === "prayer" ? "Prayer Request" : "General Chat"}`}</span></span>}
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> gave you a warning: <span style={{ fontWeight: "normal" }}>{notif.content || "regarding your post or behavior."}</span></span>
+      : notif.type?.toUpperCase() === "PENALTY"
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> placed your account on penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+      : notif.type?.toUpperCase() === "PENALTY LIFTED"
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> lifted your penalty: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+      : notif.type?.toUpperCase() === "UNBLOCKED"
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> unblocked your account: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+      : notif.filterCategory === "Deleted" || notif.type?.toUpperCase().includes("DELETE")
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> deleted your post/comment: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+      : notif.type?.toUpperCase().includes("REPORT") || notif.type?.toUpperCase().includes("MODERATION")
+      ? <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> sent an update on your report/appeal: <span style={{ fontWeight: "normal" }}>{notif.content}</span></span>
+      : <span>Admin <span style={{ display: "inline-flex", verticalAlign: "middle", margin: "0 3px" }}><BadgeIcon badge="admin" size={14} /></span> sent a message: <span style={{ fontWeight: "normal" }}>{notif.content || `New Message in ${notif.filterCategory === "prayer" ? "Prayer Request" : "General Chat"}`}</span></span>}
                         </div>
                         <div
                           style={{
@@ -616,10 +640,10 @@ export default function NotificationsPage() {
                 );
                 if (adminAcc) {
                   recentFullName = adminAcc.firstName;
-                  avatar = adminAcc.avatar || "👑";
+                  avatar = adminAcc.avatar || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
                 } else {
                   recentFullName = "Admin";
-                  avatar = "👑";
+                  avatar = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
                 }
                 team = "none";
               }
@@ -841,7 +865,7 @@ export default function NotificationsPage() {
     )}
                       </div>
 
-                      {/* Overlapping Heart Icon */}
+                      {/* Overlapping Badge / Action Icon */}
                       <div
                         style={{
                           position: "absolute",
@@ -849,43 +873,105 @@ export default function NotificationsPage() {
                           right: "-2px",
                           background: "var(--bg-color, #111)",
                           borderRadius: "50%",
-                          padding: "2px",
+                          padding: "3px",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
                           border: "2px solid rgba(10, 10, 10, 0.95)",
+                          boxShadow: "0 2px 4px rgba(0,0,0,0.5)",
                         }}
                       >
-                        <span
-                          style={{
-                            fontSize: "0.75rem",
-                            filter: notif.type.includes("mention")
-                              ? "drop-shadow(0 0 2px rgba(255,68,68,0.8))"
-                              : notif.type === "comment" ||
-                                  notif.type === "comment_reply"
-                                ? "drop-shadow(0 0 2px rgba(100,200,255,0.8))"
-                                : "drop-shadow(0 0 2px rgba(255,234,0,0.8))",
-                          }}
-                        >
-                          {notif.type === "pray"
-                            ? "🙏"
-                            : notif.type === "comment" ||
-                                notif.type === "comment_reply" ||
-                                (notif.type === "mention" &&
-                                  notif.mentionType === "post")
-                              ? "💬"
-                              : notif.type === "mention" &&
-                                  notif.mentionType !== "post"
-                                ? "@"
-                                : notif.type === "badge_update" ||
-                                    notif.type === "team_add" ||
-                                    notif.type === "team_remove"
-                                  ? "👑"
-                                  : notif.type === "prayer_deleted" ||
-                                      notif.type === "post_deleted" || notif.type === "comment_deleted"
-                                    ? "⚠️"
-                                    : "💛"}
-                        </span>
+                        {notif.type === "pray" ? (
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            xmlns="http://www.w3.org/2000/svg"
+                          >
+                            <path
+                              d="M12 2V6M10 4H14"
+                              stroke="#FACC15"
+                              strokeWidth="2"
+                              strokeLinecap="round"
+                            />
+                            <path
+                              d="M7 21L10 11C10.5 9 11.2 7 12 7C12.8 7 13.5 9 14 11L17 21"
+                              stroke="#FACC15"
+                              strokeWidth="1.8"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M12 7V21M9 13H15M7.5 17H16.5"
+                              stroke="#FACC15"
+                              strokeWidth="1.2"
+                              strokeLinecap="round"
+                              opacity="0.6"
+                            />
+                          </svg>
+                        ) : notif.type === "comment" ||
+                          notif.type === "comment_reply" ||
+                          (notif.type === "mention" && notif.mentionType === "post") ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#60A5FA"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+                          </svg>
+                        ) : notif.type === "mention" && notif.mentionType !== "post" ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#F87171"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <circle cx="12" cy="12" r="4" />
+                            <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+                          </svg>
+                        ) : notif.type === "badge_update" ||
+                          notif.type === "team_add" ||
+                          notif.type === "team_remove" ? (
+                          <BadgeIcon badge="admin" size={13} />
+                        ) : notif.type === "prayer_deleted" ||
+                          notif.type === "post_deleted" ||
+                          notif.type === "comment_deleted" ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#EF4444"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                            <line x1="12" y1="9" x2="12" y2="13" />
+                            <line x1="12" y1="17" x2="12.01" y2="17" />
+                          </svg>
+                        ) : (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="#FACC15"
+                            stroke="#FACC15"
+                            strokeWidth="1.5"
+                          >
+                            <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                          </svg>
+                        )}
                       </div>
                     </div>
 

@@ -151,30 +151,95 @@ export default function AdminUsersPage() {
           const targetUserName = formatFullName(manageUser.firstName, manageUser.lastName);
           
           if (mBadge !== editBadge) {
-            const badgeLabel = ROLES.find(r => r.id === editBadge)?.label || editBadge;
-            notifs.push({
-              id: Date.now() + Math.random(),
+            const badgeDef = getBadgeDefinition(editBadge);
+            const notifItem = {
+              id: `badge_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
               type: "badge_update",
               users: [adminName, targetUserName],
               postAuthor: targetUserName,
-              postContent: badgeLabel,
+              postContent: badgeDef.label,
               timestamp: Date.now(),
               read: false,
-              postId: "profile"
-            });
+              postId: "profile",
+              userId: manageUser.id,
+              recipient_id: manageUser.id,
+              badge: editBadge,
+              badgeLabel: badgeDef.label,
+              badgeColor: badgeDef.color,
+              adminName
+            };
+            notifs.push(notifItem);
+
+            // 1. Insert into Supabase notifications table for user ID
+            try {
+              await supabase.from('notifications').insert([{
+                sender_id: "admin",
+                sender_name: adminName,
+                recipient_id: manageUser.id,
+                type: "badge_update",
+                message: JSON.stringify(notifItem),
+                is_read: false,
+                post_id: "profile"
+              }]);
+              
+              // Also insert with recipient_id = firstName in case user session checks by name
+              if (manageUser.firstName) {
+                await supabase.from('notifications').insert([{
+                  sender_id: "admin",
+                  sender_name: adminName,
+                  recipient_id: manageUser.firstName,
+                  type: "badge_update",
+                  message: JSON.stringify(notifItem),
+                  is_read: false,
+                  post_id: "profile"
+                }]);
+              }
+            } catch (err) {
+              console.error("Error inserting badge notification", err);
+            }
+
+            // 2. Broadcast realtime event on public-notifications channel
+            try {
+              supabase.channel('public-notifications').send({
+                type: 'broadcast',
+                event: 'new_notif',
+                payload: notifItem
+              });
+            } catch (err) {}
           }
 
           if (mTeam !== editTeam) {
-            notifs.push({
-              id: Date.now() + Math.random() + 1,
+            const teamNotif = {
+              id: `team_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
               type: editTeam === "none" ? "team_remove" : "team_add",
               users: [adminName, targetUserName],
               postAuthor: targetUserName,
               postContent: editTeam === "none" ? "" : editTeam,
               timestamp: Date.now(),
               read: false,
-              postId: "profile"
-            });
+              postId: "profile",
+              userId: manageUser.id,
+              recipient_id: manageUser.id,
+              team: editTeam,
+              adminName
+            };
+            notifs.push(teamNotif);
+            try {
+              await supabase.from('notifications').insert([{
+                sender_id: "admin",
+                sender_name: adminName,
+                recipient_id: manageUser.id,
+                type: editTeam === "none" ? "team_remove" : "team_add",
+                message: JSON.stringify(teamNotif),
+                is_read: false,
+                post_id: "profile"
+              }]);
+              supabase.channel('public-notifications').send({
+                type: 'broadcast',
+                event: 'new_notif',
+                payload: teamNotif
+              });
+            } catch(e) {}
           }
           localStorage.setItem("communityNotifications", JSON.stringify(notifs));
           window.dispatchEvent(new Event("storage"));

@@ -95,6 +95,15 @@ export default function HamburgerMenu() {
                  if (parsed.firstName) parsed.firstName = formatCapitalizedName(parsed.firstName);
                  if (parsed.middleName) parsed.middleName = formatCapitalizedName(parsed.middleName);
                  if (parsed.lastName) parsed.lastName = formatCapitalizedName(parsed.lastName);
+                 // If regular user, check if their badge/team has changed in profiles table
+                 if (!adminLog && parsed.id) {
+                   const { data: prof } = await supabase.from("profiles").select("badge, team").eq("id", parsed.id).maybeSingle();
+                   if (prof && (prof.badge !== parsed.badge || (prof.team && prof.team !== parsed.team))) {
+                     parsed.badge = prof.badge || parsed.badge;
+                     if (prof.team) parsed.team = prof.team;
+                     localStorage.setItem("activeUser", JSON.stringify(parsed));
+                   }
+                 }
                  setActiveUser(parsed);
                } catch (e) {
                  setActiveUser(JSON.parse(auStr));
@@ -122,6 +131,9 @@ export default function HamburgerMenu() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
           checkStatus();
         })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+          checkStatus();
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'appeals' }, () => {
           checkStatus();
         })
@@ -131,14 +143,19 @@ export default function HamburgerMenu() {
         .on('broadcast', { event: 'announcement_updated' }, () => {
           checkStatus();
         })
+        .on('broadcast', { event: 'badge_updated' }, () => {
+          checkStatus();
+        })
         .subscribe();
 
       checkStatus();
       window.addEventListener("storage", checkStatus);
       window.addEventListener("announcements_updated", checkStatus);
+      window.addEventListener("badge_updated", checkStatus);
       return () => {
         window.removeEventListener("storage", checkStatus);
         window.removeEventListener("announcements_updated", checkStatus);
+        window.removeEventListener("badge_updated", checkStatus);
         supabase.removeChannel(channel);
       };
     }

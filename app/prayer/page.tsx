@@ -910,8 +910,11 @@ return (
                           onClick={() => togglePraying(prayer.id, prayer.likes || [])}
                           style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, margin: 0, display: "flex", alignItems: "center" }}
                         >
-                          <svg width="17" height="17" viewBox="0 0 24 24" fill={isUserPraying ? "var(--neon-yellow)" : "none"} stroke={isUserPraying ? "var(--neon-yellow)" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
-                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={isUserPraying ? "var(--neon-yellow)" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
+                            <path d="M7 21l2-4c0-1.5-.5-3-1-5-.3-1 .2-2.2 1.2-2.8l1.8-1.2l1.8 1.2c1 .6 1.5 1.8 1.2 2.8-.5 2-1 3.5-1 5l2 4" fill={isUserPraying ? "rgba(255, 234, 0, 0.25)" : "none"} />
+                            <line x1="12" y1="1" x2="12" y2="6" strokeWidth="2.5" />
+                            <line x1="9.5" y1="3" x2="14.5" y2="3" strokeWidth="2.5" />
+                            <path d="M6 21h12" />
                           </svg>
                         </button>
                         <button 
@@ -1046,7 +1049,10 @@ return (
                 {reactionsModalUsers.type === 'pray' ? (
                   <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                      <path d="M7 21l2-4c0-1.5-.5-3-1-5-.3-1 .2-2.2 1.2-2.8l1.8-1.2l1.8 1.2c1 .6 1.5 1.8 1.2 2.8-.5 2-1 3.5-1 5l2 4" fill="rgba(255, 234, 0, 0.25)" />
+                      <line x1="12" y1="1" x2="12" y2="6" strokeWidth="2.5" />
+                      <line x1="9.5" y1="3" x2="14.5" y2="3" strokeWidth="2.5" />
+                      <path d="M6 21h12" />
                     </svg>
                     Praying
                   </span>
