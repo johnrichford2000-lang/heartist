@@ -59,6 +59,7 @@ export default function LoginPage() {
   // Guidelines & Terms of Service
   const [agreeToTerms, setAgreeToTerms] = useState(false);
   const [showGuidelinesModal, setShowGuidelinesModal] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   // Forgot Password modal state
   const [showForgotPwdModal, setShowForgotPwdModal] = useState(false);
@@ -590,14 +591,10 @@ export default function LoginPage() {
       setCodeExpiry(0);
       setResendCooldown(0);
 
-      // Redirect to Login tab with success message
-      setActiveTab("login");
-      if (isAdminInvite) {
-        setMessage("Administrator account verified successfully! Please log in with your email and password to access the Admin Dashboard.");
-      } else {
-        setMessage("Account verified successfully! Please log in with your email and password to enter.");
-      }
+      // Open the Successfully Registered pop-up modal
+      setShowSuccessModal(true);
       setError("");
+      setMessage("");
     } catch(err: any) {
       setError(err.message || "Invalid or expired code.");
     } finally {
@@ -998,7 +995,20 @@ export default function LoginPage() {
         Heartist Portal
       </h1>
       
-      <div className="card" style={{ width: "100%", maxWidth: "450px", padding: "0", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,234,0,0.3)", overflow: "hidden", display: "flex", flexDirection: "column" }}>
+      <div style={{ 
+        width: "100%", 
+        maxWidth: "450px", 
+        padding: "0", 
+        background: "rgba(16, 16, 22, 0.85)", 
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        borderRadius: "16px",
+        border: "1px solid rgba(255, 255, 255, 0.16)", 
+        boxShadow: "0 12px 40px rgba(0, 0, 0, 0.6)",
+        overflow: "hidden", 
+        display: "flex", 
+        flexDirection: "column" 
+      }}>
         
         {/* Tabs / Header */}
         {activeTab === "verify" ? (
@@ -1007,16 +1017,19 @@ export default function LoginPage() {
             alignItems: "center", 
             justifyContent: "space-between", 
             padding: "16px 24px", 
-            borderBottom: "1px solid rgba(255,255,255,0.1)", 
-            background: "rgba(255,234,0,0.06)" 
+            borderBottom: "1px solid rgba(255,255,255,0.12)", 
+            background: "rgba(255,255,255,0.03)" 
           }}>
-            <span style={{ color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "0.95rem", letterSpacing: "1px" }}>
-              EMAIL VERIFICATION
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--neon-yellow)" }}></span>
+              <span style={{ color: "#ffffff", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "0.95rem", letterSpacing: "1px" }}>
+                EMAIL VERIFICATION
+              </span>
+            </div>
             <button
               type="button"
               onClick={() => { setActiveTab("register"); setError(""); setMessage(""); }}
-              style={{ background: "transparent", border: "none", color: "var(--text-muted)", fontSize: "0.82rem", cursor: "pointer", textDecoration: "underline", fontFamily: "var(--font-outfit)" }}
+              style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", fontSize: "0.82rem", cursor: "pointer", textDecoration: "underline", fontFamily: "var(--font-outfit)" }}
             >
               Back to Register
             </button>
@@ -1029,8 +1042,8 @@ export default function LoginPage() {
               style={{ 
                 flex: 1, 
                 padding: "15px", 
-                background: activeTab === "login" ? "rgba(255,234,0,0.1)" : "transparent",
-                color: activeTab === "login" ? "var(--neon-yellow)" : "var(--text-muted)",
+                background: activeTab === "login" ? "rgba(255,255,255,0.05)" : "transparent",
+                color: activeTab === "login" ? "#ffffff" : "rgba(255,255,255,0.5)",
                 borderTop: "none",
                 borderLeft: "none",
                 borderRight: "none",
@@ -1049,8 +1062,8 @@ export default function LoginPage() {
               style={{ 
                 flex: 1, 
                 padding: "15px", 
-                background: activeTab === "register" ? "rgba(255,234,0,0.1)" : "transparent",
-                color: activeTab === "register" ? "var(--neon-yellow)" : "var(--text-muted)",
+                background: activeTab === "register" ? "rgba(255,255,255,0.05)" : "transparent",
+                color: activeTab === "register" ? "#ffffff" : "rgba(255,255,255,0.5)",
                 borderTop: "none",
                 borderLeft: "none",
                 borderRight: "none",
@@ -1081,8 +1094,8 @@ export default function LoginPage() {
               {/* Info Box */}
               <div style={{ 
                 width: "100%", 
-                background: "rgba(255, 234, 0, 0.04)", 
-                border: "1px solid rgba(255, 234, 0, 0.15)", 
+                background: "rgba(255, 255, 255, 0.04)", 
+                border: "1px solid rgba(255, 255, 255, 0.12)", 
                 borderRadius: "12px", 
                 padding: "18px 16px", 
                 textAlign: "center",
@@ -1091,31 +1104,36 @@ export default function LoginPage() {
                 gap: "8px"
               }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-                  <span style={{ fontSize: "0.78rem", color: "var(--neon-yellow)", textTransform: "uppercase", letterSpacing: "1.5px", fontWeight: "bold" }}>
+                  <span style={{ fontSize: "0.78rem", color: "#ffffff", textTransform: "uppercase", letterSpacing: "1.2px", fontWeight: "bold" }}>
                     Verification Code Sent
                   </span>
                   <span style={{ 
                     fontSize: "0.78rem", 
-                    color: codeExpiry === 0 ? "#FF6B6B" : codeExpiry <= 30 ? "#FFA500" : "var(--neon-yellow)", 
+                    color: codeExpiry === 0 ? "#FF6B6B" : "#ffffff", 
                     fontFamily: "monospace, var(--font-outfit)", 
                     fontWeight: "bold",
-                    background: "rgba(0, 0, 0, 0.4)",
-                    padding: "2px 8px",
-                    borderRadius: "4px",
-                    border: codeExpiry === 0 ? "1px solid rgba(255, 107, 107, 0.4)" : "1px solid rgba(255, 234, 0, 0.3)"
+                    background: "rgba(255, 255, 255, 0.08)",
+                    padding: "3px 10px",
+                    borderRadius: "6px",
+                    border: codeExpiry === 0 ? "1px solid rgba(255, 107, 107, 0.4)" : "1px solid rgba(255, 255, 255, 0.15)"
                   }}>
                     {codeExpiry > 0 ? (
-                      `Expires: ${Math.floor(codeExpiry / 60).toString().padStart(2, "0")}:${(codeExpiry % 60).toString().padStart(2, "0")}`
+                      <>
+                        <span style={{ color: "rgba(255,255,255,0.6)", fontWeight: "normal" }}>Expires: </span>
+                        <span style={{ color: "var(--neon-yellow)", fontWeight: "bold" }}>
+                          {Math.floor(codeExpiry / 60).toString().padStart(2, "0")}:{(codeExpiry % 60).toString().padStart(2, "0")}
+                        </span>
+                      </>
                     ) : (
                       "Expired"
                     )}
                   </span>
                 </div>
 
-                <p style={{ color: "var(--text-main)", fontSize: "1rem", margin: 0, wordBreak: "break-all", fontFamily: "var(--font-outfit)" }}>
-                  <strong style={{ color: "#fff" }}>{regEmail}</strong>
+                <p style={{ color: "#ffffff", fontSize: "1.05rem", margin: 0, wordBreak: "break-all", fontFamily: "var(--font-outfit)", fontWeight: "bold" }}>
+                  {regEmail}
                 </p>
-                <p style={{ color: "var(--text-muted)", fontSize: "0.82rem", margin: "2px 0 0 0", lineHeight: "1.4" }}>
+                <p style={{ color: "rgba(255, 255, 255, 0.65)", fontSize: "0.82rem", margin: "2px 0 0 0", lineHeight: "1.4" }}>
                   {codeExpiry > 0 
                     ? "Please check your inbox (and spam folder) for the 6-digit code."
                     : "The 6-digit code has expired. Check the resend box below to request a new code."
@@ -1125,7 +1143,7 @@ export default function LoginPage() {
 
               {/* 6-Digit Code Input */}
               <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-                <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>
+                <label style={{ fontSize: "0.85rem", color: "rgba(255,255,255,0.9)", fontFamily: "var(--font-outfit)", fontWeight: "500" }}>
                   Enter 6-Digit Code
                 </label>
                 <input 
@@ -1139,24 +1157,24 @@ export default function LoginPage() {
                   maxLength={6}
                   style={{ 
                     width: "100%",
-                    maxWidth: "260px",
+                    maxWidth: "280px",
                     textAlign: "center", 
                     letterSpacing: "12px", 
-                    padding: "14px 10px", 
+                    padding: "13px 10px", 
                     borderRadius: "10px", 
                     background: codeExpiry === 0 ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.6)", 
                     border: codeExpiry === 0 
                       ? "1px solid rgba(255,107,107,0.3)" 
                       : verificationCode.length === 6 
-                        ? "1px solid var(--neon-yellow)" 
-                        : "1px solid rgba(255,255,255,0.25)", 
-                    color: codeExpiry === 0 ? "#FF6B6B" : "var(--neon-yellow)", 
+                        ? "1.5px solid var(--neon-yellow)" 
+                        : "1px solid rgba(255,255,255,0.3)", 
+                    color: codeExpiry === 0 ? "#FF6B6B" : "#ffffff", 
                     outline: "none", 
                     fontFamily: "monospace, var(--font-outfit)", 
-                    fontSize: "1.8rem", 
+                    fontSize: "1.85rem", 
                     fontWeight: "bold",
-                    boxShadow: verificationCode.length === 6 && codeExpiry > 0 ? "0 0 15px rgba(255, 234, 0, 0.25)" : "none",
-                    transition: "all 0.3s"
+                    boxShadow: verificationCode.length === 6 && codeExpiry > 0 ? "0 0 12px rgba(255, 234, 0, 0.2)" : "none",
+                    transition: "all 0.2s"
                   }}
                 />
               </div>
@@ -1175,7 +1193,7 @@ export default function LoginPage() {
               }}>
                 <span style={{ 
                   fontSize: "0.85rem", 
-                  color: "var(--neon-white)",
+                  color: "rgba(255, 255, 255, 0.9)",
                   fontFamily: "var(--font-outfit)"
                 }}>
                   Didn&apos;t get a code?
@@ -1186,19 +1204,31 @@ export default function LoginPage() {
                   disabled={resendCooldown > 0 || isResending}
                   onClick={handleResendOtp}
                   style={{
-                    background: resendCooldown > 0 || isResending ? "rgba(255, 255, 255, 0.05)" : "rgba(255, 234, 0, 0.12)",
-                    border: resendCooldown > 0 || isResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid var(--neon-yellow)",
+                    background: resendCooldown > 0 || isResending ? "rgba(255, 255, 255, 0.05)" : "transparent",
+                    border: resendCooldown > 0 || isResending ? "1px solid rgba(255, 255, 255, 0.15)" : "1px solid rgba(255, 255, 255, 0.35)",
                     borderRadius: "6px",
                     padding: "7px 14px",
-                    color: resendCooldown > 0 || isResending ? "var(--text-muted)" : "var(--neon-yellow)",
+                    color: resendCooldown > 0 || isResending ? "rgba(255,255,255,0.4)" : "#ffffff",
                     fontSize: "0.82rem",
                     fontFamily: "var(--font-outfit)",
                     fontWeight: "bold",
                     cursor: resendCooldown > 0 || isResending ? "not-allowed" : "pointer",
-                    transition: "all 0.3s",
+                    transition: "all 0.2s",
                     display: "flex",
                     alignItems: "center",
                     gap: "6px"
+                  }}
+                  onMouseEnter={(e) => {
+                    if (resendCooldown === 0 && !isResending) {
+                      e.currentTarget.style.borderColor = "var(--neon-yellow)";
+                      e.currentTarget.style.color = "var(--neon-yellow)";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (resendCooldown === 0 && !isResending) {
+                      e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.35)";
+                      e.currentTarget.style.color = "#ffffff";
+                    }
                   }}
                 >
                   {isResending ? (
@@ -1218,33 +1248,32 @@ export default function LoginPage() {
               <button 
                 type="submit"
                 disabled={isVerifying || verificationCode.length !== 6 || codeExpiry === 0}
-                className={verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "glow-text-yellow" : ""}
                 style={{ 
                   width: "100%",
                   padding: "14px", 
-                  background: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "rgba(255,234,0,0.12)" : "rgba(255,255,255,0.03)", 
-                  color: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "var(--neon-yellow)" : "rgba(255,255,255,0.3)", 
-                  border: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.15)", 
+                  background: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "var(--neon-yellow)" : "rgba(255,255,255,0.05)", 
+                  color: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "#000000" : "rgba(255,255,255,0.3)", 
+                  border: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.12)", 
                   borderRadius: "8px", 
                   fontFamily: "var(--font-outfit)", 
                   fontWeight: "bold", 
-                  fontSize: "1.05rem", 
+                  fontSize: "1rem", 
                   cursor: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "pointer" : "not-allowed", 
-                  opacity: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? 1 : 0.5,
+                  opacity: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? 1 : 0.6,
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: "10px",
-                  transition: "all 0.3s",
-                  boxShadow: verificationCode.length === 6 && !isVerifying && codeExpiry > 0 ? "0 0 15px rgba(255, 234, 0, 0.2)" : "none"
+                  transition: "all 0.2s",
+                  boxShadow: "none"
                 }}
               >
-                {isVerifying && <span className="heartist-spinner" />}
+                {isVerifying && <span className="heartist-spinner" style={{ borderColor: "rgba(0,0,0,0.2)", borderTopColor: "#000" }} />}
                 {isVerifying 
                   ? "Verifying Code..." 
                   : codeExpiry === 0 
                     ? "Code Expired - Please Resend" 
-                    : "Verify & Go to Login"}
+                    : "Verify Email"}
               </button>
 
               <button
@@ -1257,13 +1286,16 @@ export default function LoginPage() {
                 style={{ 
                   background: "transparent", 
                   border: "none", 
-                  color: "var(--text-muted)", 
+                  color: "rgba(255,255,255,0.7)", 
                   cursor: "pointer", 
                   textDecoration: "underline", 
-                  fontSize: "0.85rem", 
+                  fontSize: "0.85rem",
                   fontFamily: "var(--font-outfit)",
-                  padding: "4px 8px"
+                  marginTop: "-5px",
+                  transition: "color 0.2s"
                 }}
+                onMouseEnter={(e) => e.currentTarget.style.color = "#ffffff"}
+                onMouseLeave={(e) => e.currentTarget.style.color = "rgba(255,255,255,0.7)"}
               >
                 Wrong email? Go back to edit
               </button>
@@ -2805,6 +2837,134 @@ export default function LoginPage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Successfully Registered Pop-up Modal */}
+      {showSuccessModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: "rgba(0, 0, 0, 0.85)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 10000,
+          padding: "20px"
+        }}>
+          <div style={{
+            background: "rgba(18, 18, 24, 0.95)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            borderRadius: "18px",
+            maxWidth: "420px",
+            width: "100%",
+            padding: "32px 24px",
+            textAlign: "center",
+            boxShadow: "0 20px 50px rgba(0, 0, 0, 0.8)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center"
+          }}>
+            {/* Green SVG Check Icon */}
+            <div style={{
+              width: "68px",
+              height: "68px",
+              borderRadius: "50%",
+              background: "rgba(0, 255, 128, 0.12)",
+              border: "2px solid #00FF80",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "18px"
+            }}>
+              <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#00FF80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </div>
+
+            {/* Title */}
+            <h3 style={{
+              margin: "0 0 10px 0",
+              color: "#ffffff",
+              fontFamily: "var(--font-outfit)",
+              fontSize: "1.5rem",
+              fontWeight: "900",
+              letterSpacing: "0.5px"
+            }}>
+              Successfully Registered!
+            </h3>
+
+            {/* Subtitle / Description */}
+            <p style={{
+              margin: "0 0 20px 0",
+              color: "rgba(255, 255, 255, 0.8)",
+              fontSize: "0.92rem",
+              lineHeight: "1.5",
+              fontFamily: "var(--font-outfit)"
+            }}>
+              {isAdminInvite 
+                ? "Napatunayan na ang iyong Administrator account. Maaari ka nang mag-log in gamit ang iyong email at password para mabuksan ang Admin Dashboard."
+                : "Maligayang pagdating sa Heartist! Matagumpay nang na-verify ang iyong email address. Maaari ka nang mag-log in gamit ang iyong email at password."}
+            </p>
+
+            {/* Verified Email Card */}
+            <div style={{
+              width: "100%",
+              background: "rgba(255, 255, 255, 0.05)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              borderRadius: "10px",
+              padding: "10px 14px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              marginBottom: "24px"
+            }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#00FF80" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+              <span style={{ color: "var(--neon-yellow)", fontWeight: "bold", fontSize: "0.9rem", fontFamily: "var(--font-outfit)" }}>
+                {loginIdentifier || regEmail}
+              </span>
+            </div>
+
+            {/* Proceed to Login Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setShowSuccessModal(false);
+                setActiveTab("login");
+                if (isAdminInvite) {
+                  setMessage("Administrator account verified! Please log in to access the Admin Dashboard.");
+                } else {
+                  setMessage("Account verified! Please enter your password to log in.");
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "14px",
+                background: "var(--neon-yellow)",
+                color: "#000000",
+                border: "none",
+                borderRadius: "10px",
+                fontFamily: "var(--font-outfit)",
+                fontWeight: "900",
+                fontSize: "1.05rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+                boxShadow: "0 4px 15px rgba(255, 234, 0, 0.25)"
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = "scale(1.02)"}
+              onMouseLeave={(e) => e.currentTarget.style.transform = "scale(1)"}
+            >
+              Proceed to Login
+            </button>
           </div>
         </div>
       )}
