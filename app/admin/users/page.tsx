@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
 import AdminBottomNav from "@/components/AdminBottomNav";
 import { supabase } from "@/lib/supabase";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 const ROLES = [
   { id: "first-timer", label: "First timer 🐣", emoji: "🐣" },
@@ -78,10 +79,24 @@ export default function AdminUsersPage() {
     try {
       const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false });
       if (data && !error) {
+        // Auto-heal profiles in database if any names start with small letters
+        const needHeal = data.filter(p => 
+          (p.first_name && p.first_name !== formatCapitalizedName(p.first_name)) ||
+          (p.last_name && p.last_name !== formatCapitalizedName(p.last_name))
+        );
+        if (needHeal.length > 0) {
+          needHeal.forEach(async (p) => {
+            await supabase.from('profiles').update({
+              first_name: formatCapitalizedName(p.first_name || ""),
+              last_name: formatCapitalizedName(p.last_name || "")
+            }).eq('id', p.id);
+          });
+        }
+
         const mappedUsers = data.map(p => ({
           id: p.id,
-          firstName: p.first_name,
-          lastName: p.last_name,
+          firstName: formatCapitalizedName(p.first_name || ""),
+          lastName: formatCapitalizedName(p.last_name || ""),
           email: p.email,
           contact: p.contact_number,
           age: p.age,
@@ -126,7 +141,7 @@ export default function AdminUsersPage() {
           } else if (activeUserStr) {
              adminName = JSON.parse(activeUserStr).firstName || "Admin";
           }
-          const targetUserName = `${manageUser.firstName} ${manageUser.lastName || ''}`.trim();
+          const targetUserName = formatFullName(manageUser.firstName, manageUser.lastName);
           
           if (mBadge !== editBadge) {
             const badgeLabel = ROLES.find(r => r.id === editBadge)?.label || editBadge;
@@ -165,12 +180,12 @@ export default function AdminUsersPage() {
         const accsStr = localStorage.getItem("registeredAccounts");
         if (accsStr) {
           let accs = JSON.parse(accsStr);
-          const match = accs.find((a: any) => a.firstName === manageUser.firstName && a.lastName === manageUser.lastName);
+          const match = accs.find((a: any) => (a.firstName || '').toLowerCase() === (manageUser.firstName || '').toLowerCase() && (a.lastName || '').toLowerCase() === (manageUser.lastName || '').toLowerCase());
           if (match) {
             match.badge = editBadge;
             match.team = editTeam;
           } else {
-             accs.push({ firstName: manageUser.firstName, lastName: manageUser.lastName, avatar: manageUser.avatar || manageUser.avatar_url, badge: editBadge, team: editTeam });
+             accs.push({ firstName: formatCapitalizedName(manageUser.firstName), lastName: formatCapitalizedName(manageUser.lastName), avatar: manageUser.avatar || manageUser.avatar_url, badge: editBadge, team: editTeam });
           }
           localStorage.setItem("registeredAccounts", JSON.stringify(accs));
           
@@ -355,7 +370,7 @@ export default function AdminUsersPage() {
             />
           ) : (
             <div style={{ width: "100%", height: "100%", borderRadius: "50%", background: "transparent", color: "var(--neon-yellow)", display: "flex", justifyContent: "center", alignItems: "center", fontWeight: "900", textTransform: "uppercase", fontSize: "2rem", fontFamily: "var(--font-outfit)", border: `2px solid ${user.team && user.team !== 'none' ? user.team : 'transparent'}` }}>
-              {(user.firstName?.[0] || "") + (user.lastName?.[0] || "")}
+              {((user.firstName?.[0] || "") + (user.lastName?.[0] || "")).toUpperCase()}
             </div>
           )}
           
@@ -394,8 +409,8 @@ export default function AdminUsersPage() {
 
         {/* Name */}
         <div>
-          <h4 style={{ margin: 0, color: user.isBanned ? "#FF4444" : "var(--neon-white)", fontSize: "1.2rem", fontFamily: "var(--font-outfit)" }}>
-            {user.firstName} {user.lastName} {user.isBanned && "(BANNED)"}
+          <h4 style={{ margin: 0, color: user.isBanned ? "#FF4444" : "var(--neon-white)", fontSize: "1.2rem", fontFamily: "var(--font-outfit)", textTransform: "capitalize" }}>
+            {formatFullName(user.firstName, user.lastName)} {user.isBanned && "(BANNED)"}
           </h4>
           <p style={{ margin: "5px 0 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>
             {user.email}
@@ -947,7 +962,7 @@ export default function AdminUsersPage() {
             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
                 <span style={{ color: "var(--text-muted)" }}>Full Name:</span>
-                <span style={{ fontWeight: "bold", color: "white" }}>{manageUser.firstName} {manageUser.lastName}</span>
+                <span style={{ fontWeight: "bold", color: "white", textTransform: "capitalize" }}>{formatFullName(manageUser.firstName, manageUser.lastName)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px", position: "relative" }}>
                 <span style={{ color: "var(--text-muted)" }}>Badge:</span>
@@ -1039,7 +1054,7 @@ export default function AdminUsersPage() {
             
             <h2 style={{ color: "#FF4444", fontFamily: "var(--font-outfit)", marginBottom: "10px", marginTop: 0 }}>Ban User</h2>
             <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "20px" }}>
-              Are you sure you want to ban <strong>{banUser.firstName} {banUser.lastName}</strong>?
+              Are you sure you want to ban <strong style={{ textTransform: "capitalize" }}>{formatFullName(banUser.firstName, banUser.lastName)}</strong>?
             </p>
             
             <div style={{ marginBottom: "15px" }}>
