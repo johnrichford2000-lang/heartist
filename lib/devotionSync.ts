@@ -123,6 +123,34 @@ export async function saveUserDevotion(
   const finalTitle = title?.trim() ? title.trim() : formattedDate;
 
   try {
+    let finalImageUrl: string | undefined = undefined;
+    if (image && image.startsWith("data:image")) {
+      try {
+        const res = await fetch(image);
+        const blob = await res.blob();
+        const fileName = `devotions/${userId}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.jpg`;
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("avatars")
+          .upload(fileName, blob, {
+            contentType: "image/jpeg",
+            cacheControl: "3600",
+            upsert: true
+          });
+
+        if (!uploadError && uploadData) {
+          const { data: urlData } = supabase.storage.from("avatars").getPublicUrl(fileName);
+          finalImageUrl = urlData.publicUrl;
+        } else {
+          finalImageUrl = image;
+        }
+      } catch (err) {
+        console.warn("Storage upload error, fallback to image:", err);
+        finalImageUrl = image;
+      }
+    } else if (image) {
+      finalImageUrl = image;
+    }
+
     const currentList = await fetchUserDevotions(userId);
     const now = Date.now();
     let updatedList: DevotionEntry[];
@@ -136,14 +164,14 @@ export async function saveUserDevotion(
           ...updatedList[index],
           title: finalTitle,
           date: formattedDate,
-          text: text || (image ? "(Photo Reflection)" : ""),
+          text: text || (finalImageUrl ? "(Photo Reflection)" : ""),
           method,
           timestamp: now,
-          image: image !== undefined ? (image || undefined) : updatedList[index].image
+          image: image !== undefined ? (finalImageUrl || undefined) : updatedList[index].image
         };
       } else {
         updatedList = [
-          { id: entryId, title: finalTitle, date: formattedDate, text: text || (image ? "(Photo Reflection)" : ""), method, timestamp: now, image: image || undefined },
+          { id: entryId, title: finalTitle, date: formattedDate, text: text || (finalImageUrl ? "(Photo Reflection)" : ""), method, timestamp: now, image: finalImageUrl || undefined },
           ...currentList
         ];
       }
@@ -155,20 +183,20 @@ export async function saveUserDevotion(
         updatedList[existingDateIndex] = {
           ...updatedList[existingDateIndex],
           title: finalTitle,
-          text: text || (image ? "(Photo Reflection)" : ""),
+          text: text || (finalImageUrl ? "(Photo Reflection)" : ""),
           method,
           timestamp: now,
-          image: image !== undefined ? (image || undefined) : updatedList[existingDateIndex].image
+          image: image !== undefined ? (finalImageUrl || undefined) : updatedList[existingDateIndex].image
         };
       } else {
         const newEntry: DevotionEntry = {
           id: `dev-${now}-${Math.random().toString(36).substring(2, 7)}`,
           title: finalTitle,
           date: formattedDate,
-          text: text || (image ? "(Photo Reflection)" : ""),
+          text: text || (finalImageUrl ? "(Photo Reflection)" : ""),
           method,
           timestamp: now,
-          image: image || undefined
+          image: finalImageUrl || undefined
         };
         updatedList = [newEntry, ...currentList];
       }
