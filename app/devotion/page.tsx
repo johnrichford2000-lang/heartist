@@ -1133,15 +1133,6 @@ export default function DevotionPage() {
         <p style={{ color: "#00FF80", fontSize: "0.85rem", marginTop: "6px", marginBottom: "0", fontFamily: "var(--font-outfit)" }}>
           Don&apos;t worry, admins can&apos;t see your personal time with God. Your devotions and reflections are completely private.
         </p>
-        {currentUser && (
-          <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginTop: "10px", padding: "6px 14px", background: "rgba(255,255,255,0.05)", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.1)" }}>
-            <span style={{ fontSize: "0.8rem", color: "#00FF80", fontWeight: "bold" }}>Realtime Live</span>
-            <span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>|</span>
-            <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
-              Cloud Synced for <strong style={{ color: "var(--neon-yellow)" }}>{currentUser.fullName}</strong>
-            </span>
-          </div>
-        )}
       </header>
 
       <div style={{ maxWidth: "800px", margin: "0 auto", display: "grid", gap: "30px" }}>

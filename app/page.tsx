@@ -192,40 +192,12 @@ export default function Home() {
     });
     setCurrentDate(formattedDate);
 
-    // Update devotion based on day of year
+    // Update devotion based on day of year (consistent Word of the Day)
     const start = new Date(today.getFullYear(), 0, 0);
     const diff = Number(today) - Number(start);
     const oneDay = 1000 * 60 * 60 * 24;
     const dayOfYear = Math.floor(diff / oneDay);
     setDailyDevotion(DEVOTIONS[dayOfYear % DEVOTIONS.length]);
-  }, []);
-
-  useEffect(() => {
-    const today = new Date();
-    const start = new Date(today.getFullYear(), 0, 0);
-    const diff = Number(today) - Number(start);
-    const oneDay = 1000 * 60 * 60 * 24;
-    const dayOfYear = Math.floor(diff / oneDay);
-    const fallbackDevotion = DEVOTIONS[dayOfYear % DEVOTIONS.length];
-
-    // Try fetching from internet
-    fetch('https://beta.ourmanna.com/api/v1/get?format=json')
-      .then(response => response.json())
-      .then(data => {
-        if (data && data.verse && data.verse.details) {
-          setDailyDevotion({
-            verse: data.verse.details.reference,
-            text: `"${data.verse.details.text}"`,
-            reflection: "Take a moment to reflect on what God is telling you through this verse today." // Generic reflection since API only provides verses
-          });
-        } else {
-          setDailyDevotion(fallbackDevotion);
-        }
-      })
-      .catch((err) => {
-        console.error("Failed to fetch Manna:", err);
-        setDailyDevotion(fallbackDevotion);
-      });
   }, []);
 
   return (
