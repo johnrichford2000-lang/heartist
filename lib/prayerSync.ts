@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { formatCapitalizedName } from "@/utils/formatName";
 
 export interface PrayerData {
   id: string;
@@ -28,7 +29,10 @@ export const fetchPrayers = async (): Promise<PrayerData[]> => {
     return [];
   }
   
-  return data as PrayerData[];
+  return (data as PrayerData[]).map((p) => ({
+    ...p,
+    author_name: p.is_private ? "Anonymous Heartist" : formatCapitalizedName(p.author_name)
+  }));
 };
 
 // 2. Submit New Prayer
@@ -39,12 +43,13 @@ export const submitPrayerToSupabase = async (
   category: string,
   isPrivate: boolean
 ) => {
+  const formattedAuthorName = isPrivate ? "Anonymous Heartist" : formatCapitalizedName(authorName);
   const { data, error } = await supabase
     .from("prayers")
     .insert([
       {
         author_id: authorId,
-        author_name: authorName,
+        author_name: formattedAuthorName,
         request,
         category,
         is_private: isPrivate,

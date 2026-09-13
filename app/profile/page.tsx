@@ -8,6 +8,7 @@ import Cropper from 'react-easy-crop';
 import { getCroppedImg } from "@/utils/cropImage";
 import { supabase } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 const BASE_ROLES = [
   { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
@@ -49,12 +50,6 @@ function calculateAge(birthDateString: string): number {
     age--;
   }
   return Math.max(0, age);
-}
-
-function formatCapitalizedName(value: string): string {
-  if (!value) return "";
-  const clean = value.replace(/[^A-Za-z\s]/g, "");
-  return clean.replace(/(?:^|\s)\S/g, (char) => char.toUpperCase());
 }
 
 export default function ProfilePage() {
@@ -201,12 +196,16 @@ export default function ProfilePage() {
             setAdminAssignedBadge(null);
           }
 
+          const cleanFirst = formatCapitalizedName(profile.first_name);
+          const cleanMiddle = formatCapitalizedName(middleName);
+          const cleanLast = formatCapitalizedName(profile.last_name);
+
           const userObj = {
             id: profile.id,
             avatar: profile.avatar_url,
-            firstName: profile.first_name,
-            middleName: middleName,
-            lastName: profile.last_name,
+            firstName: cleanFirst,
+            middleName: cleanMiddle,
+            lastName: cleanLast,
             age: profile.age,
             birthDate: profile.birth_date,
             email: profile.email,
@@ -218,9 +217,9 @@ export default function ProfilePage() {
           setActiveUser(userObj);
           localStorage.setItem("activeUser", JSON.stringify(userObj));
           
-          setRegFirstName(profile.first_name || "");
-          setRegMiddleName(middleName);
-          setRegLastName(profile.last_name || "");
+          setRegFirstName(cleanFirst);
+          setRegMiddleName(cleanMiddle);
+          setRegLastName(cleanLast);
           setRegBirthDate(profile.birth_date || "");
           setRegEmail(profile.email || "");
           setRegContact(profile.contact_number || "");
@@ -369,16 +368,20 @@ export default function ProfilePage() {
         finalAvatarUrl = publicUrlData.publicUrl;
       }
 
+      const cleanFirst = formatCapitalizedName(regFirstName.trim());
+      const cleanMiddle = formatCapitalizedName(regMiddleName.trim());
+      const cleanLast = isAdminProfile ? "" : formatCapitalizedName(regLastName.trim());
+
       // Update Database
       const profileUpdates: any = {
-        first_name: regFirstName.trim(),
+        first_name: cleanFirst,
         avatar_url: finalAvatarUrl,
         email: regEmail.trim(),
         age: ""
       };
       
       if (!isAdminProfile) {
-        profileUpdates.last_name = regLastName.trim();
+        profileUpdates.last_name = cleanLast;
         profileUpdates.birth_date = regBirthDate;
         profileUpdates.contact_number = regContact.trim();
         profileUpdates.badge = regBadge;
@@ -395,9 +398,9 @@ export default function ProfilePage() {
       // Update Auth metadata
       const updateAuthPayload: any = {
         data: {
-          first_name: regFirstName.trim(),
-          middle_name: regMiddleName.trim(),
-          last_name: isAdminProfile ? "" : regLastName.trim(),
+          first_name: cleanFirst,
+          middle_name: cleanMiddle,
+          last_name: cleanLast,
           birth_date: isAdminProfile ? "" : regBirthDate,
           contact_number: isAdminProfile ? "" : regContact.trim(),
           badge: isAdminProfile ? "Admin" : regBadge
@@ -409,15 +412,15 @@ export default function ProfilePage() {
 
       // Attempt updating middle_name in profiles if column exists
       try {
-        await supabase.from("profiles").update({ middle_name: regMiddleName.trim() }).eq("id", activeUser.id);
+        await supabase.from("profiles").update({ middle_name: cleanMiddle }).eq("id", activeUser.id);
       } catch(e) {}
 
       const updatedUser = {
         ...activeUser,
         avatar: finalAvatarUrl,
-        firstName: regFirstName.trim(),
-        middleName: regMiddleName.trim(),
-        lastName: isAdminProfile ? "" : regLastName.trim(),
+        firstName: cleanFirst,
+        middleName: cleanMiddle,
+        lastName: cleanLast,
         age: "",
         birthDate: isAdminProfile ? "" : regBirthDate,
         email: regEmail.trim(),
@@ -863,7 +866,7 @@ export default function ProfilePage() {
              )}
            </div>
            <h2 style={{ margin: 0, color: "white", fontFamily: "var(--font-outfit)", textAlign: "center" }}>
-             {activeUser.firstName}{activeUser.middleName ? ` ${activeUser.middleName}` : ""} {activeUser.lastName}
+             {formatCapitalizedName(activeUser.firstName)}{activeUser.middleName ? ` ${formatCapitalizedName(activeUser.middleName)}` : ""} {formatCapitalizedName(activeUser.lastName)}
            </h2>
             <p style={{ margin: "5px 0", color: "var(--neon-yellow)", fontWeight: "bold" }}>
               {isAdminProfile ? "Admin 👑" : getRoleBadgeItem(regBadge || activeUser?.badge).label}

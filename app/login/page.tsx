@@ -27,11 +27,8 @@ export function calculateAge(birthDateString: string): number {
   return Math.max(0, age);
 }
 
-export function formatCapitalizedName(value: string): string {
-  if (!value) return "";
-  const clean = value.replace(/[^A-Za-z\s]/g, "");
-  return clean.replace(/(?:^|\s)\S/g, (char) => char.toUpperCase());
-}
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+export { formatCapitalizedName };
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"login" | "register" | "verify">("login");
@@ -325,9 +322,9 @@ export default function LoginPage() {
     const userObj = {
       id: profileData.id,
       avatar: profileData.avatar_url,
-      firstName: profileData.first_name,
-      middleName: user.user_metadata?.middle_name || "",
-      lastName: profileData.last_name,
+      firstName: formatCapitalizedName(profileData.first_name),
+      middleName: formatCapitalizedName(profileData.middle_name || user.user_metadata?.middle_name || ""),
+      lastName: formatCapitalizedName(profileData.last_name),
       age: profileData.age,
       birthDate: profileData.birth_date,
       email: profileData.email,

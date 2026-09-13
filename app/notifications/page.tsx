@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 export default function NotificationsPage() {
   const router = useRouter();
@@ -29,7 +30,12 @@ export default function NotificationsPage() {
       const currentUser = currentUserObj.firstName;
       const currentUserFullName = `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
 
-      const accs = JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
+      const rawAccs = JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
+      const accs = rawAccs.map((a: any) => ({
+        ...a,
+        firstName: formatCapitalizedName(a.firstName),
+        lastName: formatCapitalizedName(a.lastName)
+      }));
       setAccounts(accs);
 
       const fetchInbox = async () => {
@@ -183,7 +189,7 @@ export default function NotificationsPage() {
 
                const mappedNotifications = allGroups.map((group) => {
                  const recentNotif = group[group.length - 1];
-                 const uniqueUsers = Array.from(new Set(group.map((n: any) => n.fromUser || n.sourceName))).filter(Boolean);
+                 const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
 
                  let category = "Interactions";
                  if (recentNotif.type.includes("mention")) category = "Mentions";
@@ -274,19 +280,19 @@ export default function NotificationsPage() {
   const getUserDetails = (username: string) => {
     const acc = accounts.find(
       (a) =>
-        a.firstName === username ||
-        `${a.firstName} ${a.lastName}`.trim() === username,
+        a.firstName?.toLowerCase() === username?.toLowerCase() ||
+        `${a.firstName} ${a.lastName}`.trim().toLowerCase() === username?.toLowerCase(),
     );
     if (acc) {
       return {
-        fullName: `${acc.firstName} ${acc.lastName}`,
+        fullName: formatFullName(acc.firstName, acc.lastName),
         avatar: acc.avatar || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg",
         team: acc.team || "none",
         badge: acc.badge || "Heartist",
       };
     }
     return {
-      fullName: username,
+      fullName: formatCapitalizedName(username),
       avatar: "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg",
       team: "none",
       badge: "Heartist",

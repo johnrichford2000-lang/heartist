@@ -1,4 +1,5 @@
 "use client";
+import { formatCapitalizedName } from "@/utils/formatName";
 import { dispatchNotification } from "@/lib/notificationsSync";
 import MentionTextarea from '../../../components/MentionTextarea';
 
@@ -2774,7 +2775,7 @@ export default function AdminCanvasPage() {
                         <div style={{ width: "100%", background: "rgba(255,255,255,0.05)", borderRadius: "16px", padding: "10px 15px", border: "1px solid rgba(255,255,255,0.05)" }}>
                           <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px", position: "relative" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                              <span style={{ fontWeight: "bold" }}>{isAnon ? "Anonymous Heartist" : comment.author}</span>
+                              <span style={{ fontWeight: "bold" }}>{isAnon ? "Anonymous Heartist" : formatCapitalizedName(comment.author)}</span>
                             </div>
                             
                             <div style={{ position: "absolute", top: 0, right: 0 }}>
@@ -2868,7 +2869,7 @@ export default function AdminCanvasPage() {
                                           <div style={{ width: "100%", display: "flex", flexDirection: "column", background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)", padding: "10px 15px", borderRadius: "12px", borderTopLeftRadius: "2px", marginBottom: "4px" }}>
                                             <div style={{ display: "flex", flexDirection: "column", marginBottom: "8px", position: "relative" }}>
                                               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                                <span style={{ fontWeight: "bold" }}>{isRAnon ? "Anonymous Heartist" : reply.author}</span>
+                                                <span style={{ fontWeight: "bold" }}>{isRAnon ? "Anonymous Heartist" : formatCapitalizedName(reply.author)}</span>
                                               </div>
                                               
                                               <div style={{ position: "absolute", top: 0, right: 0 }}>

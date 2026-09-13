@@ -1,4 +1,5 @@
 "use client";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 import { dispatchNotification } from "@/lib/notificationsSync";
 
 
@@ -86,11 +87,13 @@ export default function PrayerRoomPage() {
     if (profiles) {
       const pMap: Record<string, string> = {};
       const accounts = profiles.map((p) => {
-        pMap[p.id] = `${p.first_name || ''} ${p.last_name || ''}`.trim();
+        const fName = formatCapitalizedName(p.first_name);
+        const lName = formatCapitalizedName(p.last_name);
+        pMap[p.id] = formatFullName(fName, lName);
         return {
           id: p.id,
-          firstName: p.first_name,
-          lastName: p.last_name,
+          firstName: fName,
+          lastName: lName,
           avatar: p.avatar_url,
           badge: p.badge,
           team: p.team,
@@ -177,7 +180,7 @@ export default function PrayerRoomPage() {
       if (au) {
         const parsed = JSON.parse(au);
         setActiveUser(parsed);
-        setName(`${parsed.firstName} ${parsed.lastName || ''}`.trim());
+        setName(formatFullName(parsed.firstName, parsed.lastName));
       }
     }
 
@@ -250,7 +253,7 @@ export default function PrayerRoomPage() {
     try {
       const insertedPrayer = await submitPrayerToSupabase(
         activeUser?.id || null,
-        isAnonymous ? "Anonymous Heartist" : name,
+        isAnonymous ? "Anonymous Heartist" : formatCapitalizedName(name),
         content,
         category,
         isAnonymous
@@ -840,7 +843,7 @@ return (
                     
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, textAlign: "left" }}>
                       <h3 style={{ fontSize: "1.1rem", fontFamily: "var(--font-outfit)", color: "var(--neon-white)", margin: 0, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-start" }}>
-                        <span style={{ color: "var(--neon-yellow)" }}>{prayer.is_private ? "Anonymous Heartist" : prayer.author_name}</span>
+                        <span style={{ color: "var(--neon-yellow)" }}>{prayer.is_private ? "Anonymous Heartist" : formatCapitalizedName(prayer.author_name)}</span>
                         {isOwner && <span style={{ color: "var(--neon-white)", fontSize: "0.9rem", fontWeight: "normal" }}>(you)</span>}
                       </h3>
                       <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", textAlign: "left", display: "flex", justifyContent: "flex-start", gap: "6px" }}>
@@ -1060,9 +1063,11 @@ return (
                     const accounts = allProfiles;
                     const acc = accounts.find((a: any) => a.id === user || a.email === user || a.firstName === user || a.supabase_id === user || `${a.firstName} ${a.lastName || ''}`.trim() === displayName);
                     if (acc) {
-                      displayName = `${acc.firstName} ${acc.lastName || ''}`.trim();
+                      displayName = formatFullName(acc.firstName, acc.lastName);
                       userAvatar = acc.avatar || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
                       teamColor = acc.team && acc.team !== 'none' ? acc.team : 'transparent';
+                    } else {
+                      displayName = formatCapitalizedName(displayName);
                     }
                   }
 
@@ -1075,7 +1080,7 @@ return (
         <img src="https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg" alt="Avatar" style={{width: '100%', height: '100%', objectFit: 'cover'}} />
     )}
                       </div>
-                      <span style={{ color: "var(--neon-white)", fontSize: "0.95rem" }}>{displayName}</span>
+                      <span style={{ color: "var(--neon-white)", fontSize: "0.95rem" }}>{formatCapitalizedName(displayName)}</span>
                     </div>
                   );
                 })

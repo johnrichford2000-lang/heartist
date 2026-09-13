@@ -1,4 +1,5 @@
 "use client";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 import { dispatchNotification } from "@/lib/notificationsSync";
 import MentionTextarea from "../../components/MentionTextarea";
 import { useState, useEffect, useRef } from "react";
@@ -411,13 +412,14 @@ export default function CanvasPage() {
   const [itemToDelete, setItemToDelete] = useState<any>(null);
 
   const isSelf = (authorName: string) => {
-    if (!activeUser) return false;
-    const fullName =
-      `${(activeUser?.firstName || "")} ${activeUser.lastName || ""}`.trim();
+    if (!activeUser || !authorName) return false;
+    const authorLower = authorName.toLowerCase().trim();
+    const firstLower = (activeUser?.firstName || "").toLowerCase().trim();
+    const fullLower = `${(activeUser?.firstName || "")} ${activeUser.lastName || ""}`.toLowerCase().trim();
     return (
-      (activeUser?.firstName || "") === authorName ||
-      fullName === authorName ||
-      activeUser.id === authorName
+      firstLower === authorLower ||
+      fullLower === authorLower ||
+      String(activeUser.id) === String(authorName)
     );
   };
 
@@ -462,8 +464,8 @@ export default function CanvasPage() {
           if (data && !error) {
             const accounts = data.map((p) => ({
               id: p.id,
-              firstName: p.first_name,
-              lastName: p.last_name,
+              firstName: formatCapitalizedName(p.first_name),
+              lastName: formatCapitalizedName(p.last_name),
               avatar: p.avatar_url,
               badge: p.badge,
               team: p.team,
@@ -513,6 +515,9 @@ export default function CanvasPage() {
             const auStr = localStorage.getItem("activeUser");
             if (auStr) {
               const au = JSON.parse(auStr);
+              if (au.firstName) au.firstName = formatCapitalizedName(au.firstName);
+              if (au.lastName) au.lastName = formatCapitalizedName(au.lastName);
+              if (au.middleName) au.middleName = formatCapitalizedName(au.middleName);
               const match = accounts.find(
                 (a) =>
                   a.firstName === au.firstName && a.lastName === au.lastName,
@@ -547,8 +552,8 @@ export default function CanvasPage() {
           if (profData) {
             const accounts = profData.map((p) => ({
               id: p.id,
-              firstName: p.first_name,
-              lastName: p.last_name,
+              firstName: formatCapitalizedName(p.first_name),
+              lastName: formatCapitalizedName(p.last_name),
               avatar: p.avatar_url,
               badge: p.badge,
               team: p.team,
@@ -1221,9 +1226,9 @@ export default function CanvasPage() {
     let generatedId = Date.now();
     try {
       const authorId = activeUser?.id || "anonymous";
-      const uName = activeUser ? `${activeUser.firstName || ''} ${activeUser.lastName || ''}`.trim() : "SystemError";
+      const uName = activeUser ? formatFullName(activeUser.firstName, activeUser.lastName) : "SystemError";
       const userTeam = activeUser?.team || "none";
-      const realName = activeUser ? `${activeUser.firstName || ''} ${activeUser.lastName || ''}`.trim() : "Heartist";
+      const realName = activeUser ? formatFullName(activeUser.firstName, activeUser.lastName) : "Heartist";
       
       const newPost = {
         id: generatedId,
@@ -1695,7 +1700,7 @@ export default function CanvasPage() {
     }
     setError("");
 
-    const uName = activeUser?.firstName || "Anonymous";
+    const uName = formatCapitalizedName(activeUser?.firstName) || "Anonymous";
     const uId = activeUser?.id || uName;
 
     try {
@@ -1771,7 +1776,7 @@ export default function CanvasPage() {
     }
     setError("");
 
-    const uName = activeUser?.firstName || "Anonymous";
+    const uName = formatCapitalizedName(activeUser?.firstName) || "Anonymous";
     const uId = activeUser?.id || uName;
 
     try {
@@ -3742,7 +3747,9 @@ return (
                                       whiteSpace: "nowrap",
                                     }}
                                   >
-                                    {post.name}
+                                    {post.name === "Anonymous" || post.name === "Anonymous Heartist" || post.author === "Anonymous" || post.author === "Anonymous Heartist"
+                                      ? "Anonymous Heartist"
+                                      : formatCapitalizedName(post.name || post.author || post.realName)}
                                   </span>
                                   {isPostAuthor(post) && (
                                     <span
@@ -4298,8 +4305,8 @@ return (
                       a.firstName === user,
                   );
                   const fullName = acc
-                    ? `${acc.firstName} ${acc.lastName || ""}`.trim()
-                    : user;
+                    ? formatFullName(acc.firstName, acc.lastName)
+                    : formatCapitalizedName(user);
                   const avatar = acc?.avatar;
                   return (
                     <div
@@ -4350,7 +4357,7 @@ return (
                           fontSize: "0.95rem",
                         }}
                       >
-                        {fullName}
+                        {formatCapitalizedName(fullName)}
                       </span>
                     </div>
                   );
@@ -4488,7 +4495,7 @@ return (
                       const cTeam = commentAcc?.team || comment.team;
                       const isAnon = comment.author === "Anonymous Heartist";
                       const cAvatar = commentAcc?.avatar || comment.avatar;
-                      const cName = commentAcc ? `${commentAcc.firstName || ""} ${commentAcc.lastName || ""}`.trim() : comment.author;
+                      const cName = commentAcc ? formatFullName(commentAcc.firstName, commentAcc.lastName) : formatCapitalizedName(comment.author);
 
                       return (
                         <div
@@ -4641,7 +4648,7 @@ return (
                                   >
                                     {isAnon
                                       ? "Anonymous Heartist"
-                                      : cName}
+                                      : formatCapitalizedName(cName)}
                                   </span>
                                   {(isSelf(comment.author) || (activeUser && (comment.authorId === activeUser.id || comment.authorId === (activeUser?.firstName || "")))) && (
                                     <span
@@ -5004,7 +5011,7 @@ return (
                                         const isRAnon =
                                           reply.author === "Anonymous Heartist";
                                         const rAvatar = replyAcc?.avatar || reply.avatar;
-                                        const rName = replyAcc ? `${replyAcc.firstName || ""} ${replyAcc.lastName || ""}`.trim() : reply.author;
+                                        const rName = replyAcc ? formatFullName(replyAcc.firstName, replyAcc.lastName) : formatCapitalizedName(reply.author);
 
                                         return (
                                           <div
@@ -5169,7 +5176,7 @@ return (
                                                     >
                                                       {isRAnon
                                                         ? "Anonymous Heartist"
-                                                        : rName}
+                                                        : formatCapitalizedName(rName)}
                                                     </span>
                                                     {(isSelf(reply.author) || (activeUser && (reply.authorId === activeUser.id || reply.authorId === (activeUser?.firstName || "")))) && (
                                                       <span

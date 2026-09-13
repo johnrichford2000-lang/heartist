@@ -1,4 +1,5 @@
 "use client";
+import { formatCapitalizedName } from "@/utils/formatName";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -90,7 +91,7 @@ export default function AdminPrayerPage() {
             .map((p: any) => ({
               id: String(p.id),
               author_id: p.author_id || p.authorId || null,
-              author_name: p.author_name || p.username || p.name || "Anonymous Heartist",
+              author_name: p.author_name ? formatCapitalizedName(p.author_name) : (p.username ? formatCapitalizedName(p.username) : "Anonymous Heartist"),
               request: p.request || p.content || "",
               category: "Others",
               likes: p.likes || [],
@@ -107,7 +108,7 @@ export default function AdminPrayerPage() {
           const localFusionPrayers = fusionPrayers.map((p: any) => ({
               id: String(p.id),
               author_id: p.author_id || p.authorId || null,
-              author_name: p.author_name || p.username || p.name || "Anonymous Heartist",
+              author_name: p.author_name ? formatCapitalizedName(p.author_name) : (p.username ? formatCapitalizedName(p.username) : "Anonymous Heartist"),
               request: p.request || p.content || "",
               category: p.category,
               likes: p.likes || [],

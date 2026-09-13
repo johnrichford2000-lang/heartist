@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { formatCapitalizedName, formatFullName } from '@/utils/formatName';
 
 export async function fetchCommunityPosts() {
   // Fetch posts with author profiles
@@ -45,7 +46,7 @@ export async function fetchCommunityPosts() {
   const mappedPosts = postsData.map((post: any) => {
     // Determine author info
     const isAnon = post.is_anonymous;
-    const authorName = isAnon ? "Anonymous Heartist" : `${post.profiles?.first_name} ${post.profiles?.last_name}`;
+    const authorName = isAnon ? "Anonymous Heartist" : formatCapitalizedName(formatFullName(post.profiles?.first_name, post.profiles?.last_name) || post.name || post.username || "Heartist");
     const authorAvatar = isAnon ? "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg" : (post.profiles?.avatar_url || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg");
     const authorRole = isAnon ? "Anonymous" : (post.profiles?.badge || "Heart-Seeker");
 
@@ -53,14 +54,14 @@ export async function fetchCommunityPosts() {
     const postComments = commentsData.filter((c: any) => c.post_id === post.id && !c.parent_id);
     
     const mappedComments = postComments.map((c: any) => {
-      const cAuthorName = `${c.profiles?.first_name} ${c.profiles?.last_name}`;
+      const cAuthorName = formatCapitalizedName(formatFullName(c.profiles?.first_name, c.profiles?.last_name) || c.author || "Heartist");
       const cAuthorAvatar = c.profiles?.avatar_url || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
       
       const replies = commentsData.filter((r: any) => r.parent_id === c.id);
       const mappedReplies = replies.map((r: any) => ({
         id: r.id,
         authorId: r.author_id,
-        author: `${r.profiles?.first_name} ${r.profiles?.last_name}`,
+        author: formatCapitalizedName(formatFullName(r.profiles?.first_name, r.profiles?.last_name) || r.author || "Heartist"),
         avatar: r.profiles?.avatar_url || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg",
         content: r.content,
         timestamp: new Date(r.created_at).getTime(),
