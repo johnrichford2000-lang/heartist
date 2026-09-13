@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { fetchPrayers, PrayerData } from "@/lib/prayerSync";
+import BadgeIcon, { BadgePill } from "@/components/BadgeIcon";
 
 export default function AdminPrayerPage() {
   const [prayers, setPrayers] = useState<any[]>([]);
@@ -223,7 +224,14 @@ export default function AdminPrayerPage() {
             boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(255,68,68,0.2)",
             textAlign: "center"
           }}>
-            <div style={{ fontSize: "3rem", marginBottom: "15px" }}>🗑️</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px" }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#FF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                <line x1="10" y1="11" x2="10" y2="17"></line>
+                <line x1="14" y1="11" x2="14" y2="17"></line>
+              </svg>
+            </div>
             <h3 style={{ margin: "0 0 10px 0", color: "#FF4444", fontFamily: "var(--font-outfit)", fontSize: "1.3rem" }}>
               Delete Prayer?
             </h3>
@@ -279,7 +287,7 @@ export default function AdminPrayerPage() {
               fontFamily: "var(--font-outfit)", fontSize: "1rem", cursor: "pointer", transition: "all 0.3s"
             }}
           >
-            Answered ✨
+            Answered
           </button>
         </div>
 
@@ -323,27 +331,6 @@ export default function AdminPrayerPage() {
 
               if (prayer.is_private) {
                 postRole = "anonymous";
-              }
-
-              let badgeIcon = "";
-              switch (postRole?.toLowerCase()) {
-                case "first-timer":
-                case "first timer": badgeIcon = "🐣"; break;
-                case "camp-veteran":
-                case "camp veteran": badgeIcon = "🎖️"; break;
-                case "supporter": badgeIcon = "💖"; break;
-                case "pastor": badgeIcon = "📖"; break;
-                case "camp-coordinator":
-                case "camp coordinator": badgeIcon = "🎯"; break;
-                case "facilitator":
-                case "staff / facilitator": badgeIcon = "⭐"; break;
-                case "media-team":
-                case "media team": badgeIcon = "📸"; break;
-                case "music-team":
-                case "music team": badgeIcon = "🎵"; break;
-                case "prayer-team":
-                case "prayer team": badgeIcon = "🙏"; break;
-                case "anonymous": badgeIcon = "👤"; break;
               }
 
               return (
@@ -399,8 +386,8 @@ export default function AdminPrayerPage() {
       </div>
   )}
   </div>
-                        <div style={{ position: "absolute", bottom: "-2px", right: "-4px", fontSize: "1.1rem", background: "var(--bg-main)", borderRadius: "50%", padding: "2px", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-                          {badgeIcon}
+                        <div style={{ position: "absolute", bottom: "-2px", right: "-4px", background: "var(--bg-main, #0a0a0c)", borderRadius: "50%", padding: "3px", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, border: "1px solid rgba(255,255,255,0.2)" }}>
+                          <BadgeIcon badge={postRole} size={13} />
                         </div>
                       </div>
 
@@ -410,6 +397,7 @@ export default function AdminPrayerPage() {
                           <span style={{ color: "var(--neon-yellow)" }}>
                             {prayer.is_private ? "Anonymous Heartist" : realName}
                           </span>
+                          <BadgePill badge={postRole} size={12} />
                         </h3>
                         
                         {/* Hidden Real Name revealed */}

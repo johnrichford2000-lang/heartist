@@ -8,6 +8,7 @@ import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
 import { supabase } from "@/lib/supabase";
 import { fetchPrayers, submitPrayerToSupabase, togglePrayerLike, togglePrayerHeart, markPrayerAsAnswered, PrayerData } from "@/lib/prayerSync";
+import BadgeIcon, { BadgePill } from "@/components/BadgeIcon";
 
 export default function PrayerRoomPage() {
   const CATEGORIES = [
@@ -558,7 +559,13 @@ return (
             boxShadow: "0 10px 30px rgba(0,0,0,0.5), 0 0 20px rgba(255,68,68,0.2)",
             textAlign: "center"
           }} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: "3rem", marginBottom: "15px" }}>⚠️</div>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px" }}>
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="#FF4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                <line x1="12" y1="9" x2="12" y2="13"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
             <h3 style={{ margin: "0 0 10px 0", color: "#FF4444", fontFamily: "var(--font-outfit)", fontSize: "1.3rem" }}>
               Report Limit Reached
             </h3>
@@ -620,7 +627,7 @@ return (
             transition: "all 0.3s"
           }}
         >
-          Answered ✨
+          Answered
         </button>
       </div>
 
@@ -810,40 +817,29 @@ return (
   </div>
                         ); 
                       })()}
-                      <div style={{ position: "absolute", bottom: "-2px", right: "-4px", fontSize: "1.1rem", background: "var(--bg-main)", borderRadius: "50%", padding: "2px", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
-                        {(() => {
-                          const accounts = allProfiles;
-                          const postAcc = accounts.find((a: any) => `${a.firstName} ${a.lastName || ''}`.trim() === prayer.author_name || a.firstName === prayer.author_name || a.firstName === prayer.author_id);
-                          const isAnon = prayer.is_private || (prayer.author_name && prayer.author_name.toLowerCase().includes('anonymous'));
-                          const postRole = isAnon ? 'anonymous' : (postAcc?.badge || "");
-                          switch (postRole?.toLowerCase()) {
-                            case "first-timer":
-                            case "first timer": return "🐣";
-                            case "camp-veteran":
-                            case "camp veteran": return "🎖️";
-                            case "supporter": return "💖";
-                            case "pastor": return "📖";
-                            case "camp-coordinator":
-                            case "camp coordinator": return "🎯";
-                            case "facilitator":
-                            case "staff / facilitator": return "⭐";
-                            case "media-team":
-                            case "media team": return "📸";
-                            case "music-team":
-                            case "music team": return "🎵";
-                            case "prayer-team":
-                            case "prayer team": return "🙏";
-                            case "anonymous":
-          return "👤";
-                            default: return "";
-                          }
-                        })()}
-                      </div>
+                      {(() => {
+                        const accounts = allProfiles;
+                        const postAcc = accounts.find((a: any) => `${a.firstName} ${a.lastName || ''}`.trim() === prayer.author_name || a.firstName === prayer.author_name || a.firstName === prayer.author_id);
+                        const isAnon = prayer.is_private || (prayer.author_name && prayer.author_name.toLowerCase().includes('anonymous'));
+                        const postRole = isAnon ? 'anonymous' : (postAcc?.badge || "first-timer");
+                        return (
+                          <div style={{ position: "absolute", bottom: "-2px", right: "-4px", background: "var(--bg-main, #0a0a0c)", borderRadius: "50%", padding: "3px", display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1, border: "1px solid rgba(255,255,255,0.2)" }}>
+                            <BadgeIcon badge={postRole} size={13} />
+                          </div>
+                        );
+                      })()}
                     </div>
                     
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, textAlign: "left" }}>
                       <h3 style={{ fontSize: "1.1rem", fontFamily: "var(--font-outfit)", color: "var(--neon-white)", margin: 0, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-start" }}>
                         <span style={{ color: "var(--neon-yellow)" }}>{prayer.is_private ? "Anonymous Heartist" : formatCapitalizedName(prayer.author_name)}</span>
+                        {(() => {
+                          const accounts = allProfiles;
+                          const postAcc = accounts.find((a: any) => `${a.firstName} ${a.lastName || ''}`.trim() === prayer.author_name || a.firstName === prayer.author_name || a.firstName === prayer.author_id);
+                          const isAnon = prayer.is_private || (prayer.author_name && prayer.author_name.toLowerCase().includes('anonymous'));
+                          const postRole = isAnon ? 'anonymous' : (postAcc?.badge || "first-timer");
+                          return <BadgePill badge={postRole} size={12} />;
+                        })()}
                         {isOwner && <span style={{ color: "var(--neon-white)", fontSize: "0.9rem", fontWeight: "normal" }}>(you)</span>}
                       </h3>
                       <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", textAlign: "left", display: "flex", justifyContent: "flex-start", gap: "6px" }}>
@@ -854,7 +850,12 @@ return (
 
                 {prayer.status === "answered" && prayer.answer_comment && (
                   <div style={{ background: "rgba(255,255,255,0.05)", padding: "15px", borderRadius: "8px", border: "1px dashed rgba(255,255,255,0.2)", marginBottom: "15px", width: "100%", textAlign: "center" }}>
-                    <p style={{ margin: "0 0 5px 0", color: "var(--neon-yellow)", fontWeight: "bold", fontSize: "0.85rem" }}>✨ ANSWERED PRAYER</p>
+                    <p style={{ margin: "0 0 5px 0", color: "var(--neon-yellow)", fontWeight: "bold", fontSize: "0.85rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                      </svg>
+                      ANSWERED PRAYER
+                    </p>
                     <p style={{ margin: 0, color: "var(--neon-white)", fontSize: "0.95rem", fontStyle: "italic", lineHeight: "1.5" }}>"{prayer.answer_comment}"</p>
                     {prayer.answered_timestamp && (
                       <p style={{ margin: "5px 0 0 0", color: "var(--text-muted)", fontSize: "0.75rem" }}>- {timeAgo(prayer.answered_timestamp)}</p>
@@ -916,7 +917,9 @@ return (
                           onClick={() => togglePraying(prayer.id, prayer.likes || [])}
                           style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, margin: 0, display: "flex", alignItems: "center" }}
                         >
-                          <span style={{ fontSize: "1.2rem" }}>🙏</span>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill={isUserPraying ? "var(--neon-yellow)" : "none"} stroke={isUserPraying ? "var(--neon-yellow)" : "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
+                            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                          </svg>
                         </button>
                         <button 
                           onClick={() => setReactionsModalUsers({ id: prayer.id, type: 'pray', users: prayer.likes || [] })}
@@ -945,7 +948,9 @@ return (
                           onClick={() => toggleHeart(prayer.id, prayer.hearts || [])}
                           style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, margin: 0, display: "flex", alignItems: "center" }}
                         >
-                          <span style={{ fontSize: "1.2rem" }}>❤️</span>
+                          <svg width="17" height="17" viewBox="0 0 24 24" fill={isUserHearting ? "#ff4d4d" : "none"} stroke="#ff4d4d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                          </svg>
                         </button>
                         <button 
                           onClick={() => setReactionsModalUsers({ id: prayer.id, type: 'heart', users: prayer.hearts || [] })}
@@ -970,7 +975,7 @@ return (
                         cursor: "pointer"
                       }}
                     >
-                      Mark as Answered ✨
+                      Mark as Answered
                     </button>
                   )}
                 </div>
@@ -996,7 +1001,7 @@ return (
                         onClick={() => handleConfirmAnswered(prayer.id)}
                         style={{ padding: "6px 15px", borderRadius: "20px", background: "var(--neon-yellow)", border: "none", color: "black", fontWeight: "bold", cursor: "pointer", fontSize: "0.85rem" }}
                       >
-                        Publish Testimony ✨
+                        Publish Testimony
                       </button>
                     </div>
                   </div>
@@ -1045,7 +1050,21 @@ return (
           <div style={{ display: "flex", flexDirection: "column", background: "var(--bg-main)", width: "100%", maxWidth: "400px", border: `1px solid ${reactionsModalUsers.type === 'pray' ? 'var(--neon-yellow)' : '#ff4d4d'}`, borderTop: `4px solid ${reactionsModalUsers.type === 'pray' ? 'var(--neon-yellow)' : '#ff4d4d'}`, borderRadius: "12px", padding: "20px", animation: "scaleUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)", boxShadow: `0 8px 30px ${reactionsModalUsers.type === 'pray' ? 'rgba(255, 255, 0, 0.15)' : 'rgba(255, 77, 77, 0.15)'}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
               <h3 style={{ margin: 0, color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                {reactionsModalUsers.type === 'pray' ? '🙏 Praying' : '❤️ Hearts'}
+                {reactionsModalUsers.type === 'pray' ? (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                    </svg>
+                    Praying
+                  </span>
+                ) : (
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#ff4d4d" stroke="#ff4d4d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                    Hearts
+                  </span>
+                )}
               </h3>
               <button onClick={() => setReactionsModalUsers(null)} style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem" }}>×</button>
             </div>
