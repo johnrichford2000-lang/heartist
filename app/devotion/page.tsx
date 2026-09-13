@@ -749,7 +749,7 @@ export default function DevotionPage() {
       const img = new Image();
       img.onload = () => {
         const canvas = document.createElement("canvas");
-        const MAX_DIM = 1200;
+        const MAX_DIM = 960;
         let width = img.width;
         let height = img.height;
 
@@ -770,7 +770,7 @@ export default function DevotionPage() {
         const ctx = canvas.getContext("2d");
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const compressed = canvas.toDataURL("image/jpeg", 0.82);
+          const compressed = canvas.toDataURL("image/jpeg", 0.74);
           setReflectionImage(compressed);
         } else {
           setReflectionImage(event.target?.result as string);
@@ -1650,6 +1650,20 @@ export default function DevotionPage() {
                             gap: "14px"
                           }}
                         >
+                          <div style={{
+                            background: "rgba(255, 234, 0, 0.08)",
+                            border: "1px solid rgba(255, 234, 0, 0.25)",
+                            borderRadius: "8px",
+                            padding: "6px 14px",
+                            color: "var(--neon-yellow)",
+                            fontSize: "0.8rem",
+                            fontFamily: "var(--font-outfit)",
+                            lineHeight: "1.4",
+                            maxWidth: "500px"
+                          }}>
+                            Note: Every 30 days, uploaded pictures are automatically removed to save storage, but your written reflections stay forever.
+                          </div>
+
                           <div>
                             <div style={{ color: "var(--neon-white)", fontWeight: "bold", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>
                               Add a Photo Reflection
@@ -1717,6 +1731,21 @@ export default function DevotionPage() {
                         </div>
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {/* 30-Day Note for attached picture */}
+                          <div style={{
+                            background: "rgba(255, 234, 0, 0.08)",
+                            border: "1px solid rgba(255, 234, 0, 0.25)",
+                            borderRadius: "8px",
+                            padding: "6px 14px",
+                            color: "var(--neon-yellow)",
+                            fontSize: "0.8rem",
+                            fontFamily: "var(--font-outfit)",
+                            lineHeight: "1.4",
+                            textAlign: "center"
+                          }}>
+                            Note: Every 30 days, uploaded pictures are automatically removed to save storage, but your written reflections stay forever.
+                          </div>
+
                           {/* Photo Preview */}
                           <div
                             style={{

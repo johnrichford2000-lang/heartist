@@ -37,6 +37,47 @@ export function formatDevotionDate(dateInput?: Date | string): string {
 }
 
 const SETTING_PREFIX = "user_devotions_";
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Automatically prunes devotion images older than 30 days from Supabase storage
+ * to protect the 5GB quota, while preserving all reflection text, journals, and dates forever.
+ */
+async function pruneExpiredDevotionImages(list: DevotionEntry[]): Promise<{ updatedList: DevotionEntry[]; hasChanges: boolean }> {
+  const now = Date.now();
+  let hasChanges = false;
+  const pathsToDelete: string[] = [];
+
+  const updatedList = list.map(entry => {
+    const entryTime = entry.timestamp || (entry.date ? new Date(entry.date).getTime() : 0);
+    const isExpired = entryTime > 0 && (now - entryTime > THIRTY_DAYS_MS);
+
+    if (isExpired && entry.image) {
+      hasChanges = true;
+      if (entry.image.includes("/public/avatars/")) {
+        const match = entry.image.match(/\/public\/avatars\/(.+)$/);
+        if (match && match[1]) {
+          pathsToDelete.push(decodeURIComponent(match[1]));
+        }
+      }
+      return {
+        ...entry,
+        image: undefined
+      };
+    }
+    return entry;
+  });
+
+  if (pathsToDelete.length > 0) {
+    try {
+      supabase.storage.from("avatars").remove(pathsToDelete).catch(() => {});
+    } catch (e) {
+      console.warn("Storage auto-prune error:", e);
+    }
+  }
+
+  return { updatedList, hasChanges };
+}
 
 /**
  * Fetches all devotion journal entries for a given user from Supabase cloud.
@@ -55,7 +96,7 @@ export async function fetchUserDevotions(userId: string): Promise<DevotionEntry[
       .single();
 
     if (!settingError && settingData && Array.isArray(settingData.value)) {
-      return settingData.value.map((item: any) => ({
+      const rawList: DevotionEntry[] = settingData.value.map((item: any) => ({
         id: item.id || `dev-${item.timestamp || Date.now()}`,
         title: item.title || formatDevotionDate(item.date),
         date: formatDevotionDate(item.date),
@@ -64,6 +105,20 @@ export async function fetchUserDevotions(userId: string): Promise<DevotionEntry[
         timestamp: item.timestamp || (item.date ? new Date(item.date).getTime() : Date.now()),
         image: item.image || undefined
       }));
+
+      const { updatedList, hasChanges } = await pruneExpiredDevotionImages(rawList);
+      if (hasChanges) {
+        supabase
+          .from("system_settings")
+          .upsert({
+            id: `${SETTING_PREFIX}${userId}`,
+            value: updatedList,
+            updated_at: new Date().toISOString()
+          })
+          .then();
+      }
+
+      return updatedList;
     }
 
     // 2. Fallback: check legacy `forms` table if system_settings has not been initialized yet
@@ -202,12 +257,15 @@ export async function saveUserDevotion(
       }
     }
 
+    // Prune any entries older than 30 days before persisting
+    const { updatedList: prunedList } = await pruneExpiredDevotionImages(updatedList);
+
     // Persist to Supabase cloud
     const { error } = await supabase
       .from("system_settings")
       .upsert({
         id: `${SETTING_PREFIX}${userId}`,
-        value: updatedList,
+        value: prunedList,
         updated_at: new Date().toISOString()
       });
 
@@ -232,6 +290,14 @@ export async function deleteUserDevotion(id: string, userId: string): Promise<bo
 
   try {
     const currentList = await fetchUserDevotions(userId);
+    const itemToDelete = currentList.find(item => item.id === id);
+    if (itemToDelete?.image && itemToDelete.image.includes("/public/avatars/")) {
+      const match = itemToDelete.image.match(/\/public\/avatars\/(.+)$/);
+      if (match && match[1]) {
+        supabase.storage.from("avatars").remove([decodeURIComponent(match[1])]).catch(() => {});
+      }
+    }
+
     const updatedList = currentList.filter(item => item.id !== id);
 
     // Save updated list back to Supabase cloud
