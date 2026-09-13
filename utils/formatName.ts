@@ -5,10 +5,9 @@
  */
 export function formatCapitalizedName(value: string | null | undefined): string {
   if (!value || typeof value !== "string") return "";
-  const trimmed = value.trim();
-  if (!trimmed) return "";
+  if (!value.trim()) return value;
 
-  const lower = trimmed.toLowerCase();
+  const lower = value.trim().toLowerCase();
   if (lower === "anonymous" || lower === "anonymous heartist") {
     return "Anonymous Heartist";
   }
@@ -17,7 +16,7 @@ export function formatCapitalizedName(value: string | null | undefined): string 
     return "System Error";
   }
 
-  return trimmed
+  return value
     .split(/(\s+|-|\.)/)
     .map((part) => {
       if (!part || /^\s+$/.test(part) || part === "-" || part === ".") return part;

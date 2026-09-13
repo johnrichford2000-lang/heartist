@@ -392,18 +392,49 @@ export default function LoginPage() {
           return;
         }
 
-        const { data: profiles, error: lookupError } = await supabase
+        // 1. Exact match on first_name (e.g. "John Richford" or "John")
+        let { data: profiles } = await supabase
           .from("profiles")
           .select("email, first_name")
           .ilike("first_name", emailToUse)
           .limit(1);
+
+        // 2. If not found and user typed only the first word (e.g. "John" while registered as "John Richford")
+        if ((!profiles || profiles.length === 0) && !emailToUse.includes(" ")) {
+          const { data: prefixProfiles } = await supabase
+            .from("profiles")
+            .select("email, first_name")
+            .ilike("first_name", `${emailToUse} %`)
+            .limit(1);
+          if (prefixProfiles && prefixProfiles.length > 0) {
+            profiles = prefixProfiles;
+          }
+        }
+
+        // 3. Fallback: Check if user typed full name (e.g. "John Richford Lozano")
+        if (!profiles || profiles.length === 0) {
+          const nameParts = emailToUse.split(/\s+/);
+          if (nameParts.length >= 2) {
+            const possibleFirst = nameParts.slice(0, -1).join(" ");
+            const possibleLast = nameParts[nameParts.length - 1];
+            const { data: fullProfiles } = await supabase
+              .from("profiles")
+              .select("email, first_name, last_name")
+              .ilike("first_name", possibleFirst)
+              .ilike("last_name", possibleLast)
+              .limit(1);
+            if (fullProfiles && fullProfiles.length > 0) {
+              profiles = fullProfiles;
+            }
+          }
+        }
           
         const profile = profiles && profiles.length > 0 ? profiles[0] : null;
           
         if (profile && profile.email) {
           emailToUse = profile.email;
         } else {
-          setError("User not found with that First Name.");
+          setError("User not found with that First Name or Name.");
           return;
         }
       }
