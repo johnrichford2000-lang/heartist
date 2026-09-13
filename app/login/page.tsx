@@ -44,7 +44,21 @@ export function calculateAge(birthDateString: string): number {
 }
 
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+import { validatePasswordStrength } from "@/utils/passwordValidation";
 export { formatCapitalizedName };
+
+const CriteriaCheck = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const CriteriaDot = () => (
+  <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" />
+  </svg>
+);
+
 
 export default function LoginPage() {
   const [activeTab, setActiveTab] = useState<"login" | "register" | "verify">("login");
@@ -181,11 +195,15 @@ export default function LoginPage() {
     !regPassword || 
     !regConfirmPassword;
 
+  // Password strength validations
+  const regPassValidation = validatePasswordStrength(regPassword);
+  const forgotPassValidation = validatePasswordStrength(forgotNewPassword);
+
   const isRegisterDisabled = 
     isRegistering || 
     isRegisterFormIncomplete || 
     !agreeToTerms ||
-    regPassword.length < 6 ||
+    !regPassValidation.isValid ||
     regPassword !== regConfirmPassword;
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -527,8 +545,9 @@ export default function LoginPage() {
       return;
     }
 
-    if (regPassword.length < 6) {
-      setError("Password must be at least 6 characters long.");
+    const regPassCheck = validatePasswordStrength(regPassword);
+    if (!regPassCheck.isValid) {
+      setError(regPassCheck.errorMessage);
       return;
     }
 
@@ -842,8 +861,9 @@ export default function LoginPage() {
       return;
     }
 
-    if (forgotNewPassword.length < 6) {
-      setForgotError("New password must be at least 6 characters long.");
+    const forgotPassCheck = validatePasswordStrength(forgotNewPassword);
+    if (!forgotPassCheck.isValid) {
+      setForgotError(forgotPassCheck.errorMessage);
       return;
     }
 
@@ -1922,7 +1942,7 @@ export default function LoginPage() {
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                 <input 
                   type={showRegPwd ? "text" : "password"} 
-                  placeholder="Create Password (min. 6 chars)" 
+                  placeholder="Create Strong Password (min. 8 chars)" 
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
                   style={{ width: "100%", paddingTop: "12px", paddingBottom: "12px", paddingLeft: "15px", paddingRight: "45px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
@@ -1936,6 +1956,41 @@ export default function LoginPage() {
                   <PasswordEye show={showRegPwd} />
                 </button>
               </div>
+
+              {/* Live Password Strength Criteria */}
+              {regPassword.length > 0 && (
+                <div style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                  gap: "6px",
+                  background: "rgba(0,0,0,0.35)",
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  marginTop: "-4px"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: regPassValidation.criteria.hasMinLength ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                    {regPassValidation.criteria.hasMinLength ? <CriteriaCheck /> : <CriteriaDot />}
+                    <span>8+ characters</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: regPassValidation.criteria.hasUpper ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                    {regPassValidation.criteria.hasUpper ? <CriteriaCheck /> : <CriteriaDot />}
+                    <span>Big letter (A-Z)</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: regPassValidation.criteria.hasLower ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                    {regPassValidation.criteria.hasLower ? <CriteriaCheck /> : <CriteriaDot />}
+                    <span>Small letter (a-z)</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: regPassValidation.criteria.hasNumber ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                    {regPassValidation.criteria.hasNumber ? <CriteriaCheck /> : <CriteriaDot />}
+                    <span>Number (0-9)</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: regPassValidation.criteria.hasUniqueKey ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                    {regPassValidation.criteria.hasUniqueKey ? <CriteriaCheck /> : <CriteriaDot />}
+                    <span>Unique key (_, -, @, #)</span>
+                  </div>
+                </div>
+              )}
 
               {/* Confirm Password */}
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -2017,8 +2072,8 @@ export default function LoginPage() {
                     ? "Creating your account..."
                     : isRegisterFormIncomplete
                       ? "Paki-fill up ang lahat ng impormasyon para makapag-sign up."
-                      : regPassword.length < 6
-                        ? "Ang password ay dapat hindi bababa sa 6 characters."
+                      : !regPassValidation.isValid
+                        ? regPassValidation.errorMessage
                         : regPassword !== regConfirmPassword
                           ? "Hindi magkatugma ang password at confirm password."
                           : !agreeToTerms
@@ -2472,7 +2527,7 @@ export default function LoginPage() {
 
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    New Password (min. 6 chars)
+                    New Password (min. 8 chars, strong)
                   </label>
                   <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
                     <input 
@@ -2491,6 +2546,41 @@ export default function LoginPage() {
                       <PasswordEye show={showForgotNewPwd} />
                     </button>
                   </div>
+
+                  {/* Live Password Strength Criteria for Forgot Password */}
+                  {forgotNewPassword.length > 0 && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                      gap: "6px",
+                      background: "rgba(0,0,0,0.35)",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      marginTop: "6px"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: forgotPassValidation.criteria.hasMinLength ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {forgotPassValidation.criteria.hasMinLength ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>8+ characters</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: forgotPassValidation.criteria.hasUpper ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {forgotPassValidation.criteria.hasUpper ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Big letter (A-Z)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: forgotPassValidation.criteria.hasLower ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {forgotPassValidation.criteria.hasLower ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Small letter (a-z)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: forgotPassValidation.criteria.hasNumber ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {forgotPassValidation.criteria.hasNumber ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Number (0-9)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: forgotPassValidation.criteria.hasUniqueKey ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {forgotPassValidation.criteria.hasUniqueKey ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Unique key (_, -, @, #)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div>
@@ -2519,7 +2609,7 @@ export default function LoginPage() {
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0}
+                    disabled={isForgotLoading || forgotCode.length !== 6 || !forgotPassValidation.isValid || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
@@ -2531,8 +2621,8 @@ export default function LoginPage() {
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
                       fontSize: "0.95rem",
-                      cursor: (isForgotLoading || forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? "not-allowed" : "pointer",
-                      opacity: (forgotCode.length !== 6 || forgotNewPassword.length < 6 || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? 0.5 : 1,
+                      cursor: (isForgotLoading || forgotCode.length !== 6 || !forgotPassValidation.isValid || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? "not-allowed" : "pointer",
+                      opacity: (forgotCode.length !== 6 || !forgotPassValidation.isValid || forgotNewPassword !== forgotConfirmPassword || forgotCodeExpiry === 0) ? 0.5 : 1,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

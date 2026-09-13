@@ -6,9 +6,23 @@ import HeartistLogo from "@/components/HeartistLogo";
 import CustomDropdown from "@/components/CustomDropdown";
 import Cropper from 'react-easy-crop';
 import { getCroppedImg } from "@/utils/cropImage";
-import { supabase } from "@/lib/supabase";
+import { supabase, createEphemeralClient } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+import { validatePasswordStrength } from "@/utils/passwordValidation";
+
+const CriteriaCheck = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="20 6 9 17 4 12" />
+  </svg>
+);
+
+const CriteriaDot = () => (
+  <svg width="6" height="6" viewBox="0 0 24 24" fill="currentColor">
+    <circle cx="12" cy="12" r="10" />
+  </svg>
+);
+
 
 const BASE_ROLES = [
   { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
@@ -78,6 +92,7 @@ export default function ProfilePage() {
   const [pwdOtpCode, setPwdOtpCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const newPassValidation = validatePasswordStrength(newPassword);
   const [isPwdLoading, setIsPwdLoading] = useState(false);
   const [pwdError, setPwdError] = useState("");
   const [pwdMessage, setPwdMessage] = useState("");
@@ -595,8 +610,9 @@ export default function ProfilePage() {
       return;
     }
 
-    if (newPassword.length < 6) {
-      setPwdError("New password must be at least 6 characters long.");
+    const newPassCheck = validatePasswordStrength(newPassword);
+    if (!newPassCheck.isValid) {
+      setPwdError(newPassCheck.errorMessage);
       return;
     }
 
@@ -617,6 +633,42 @@ export default function ProfilePage() {
       });
 
       if (verifyError) throw verifyError;
+
+      // Check conflict for new password against other users with the same First Name
+      const myFirstName = activeUser?.firstName;
+      if (myFirstName) {
+        const formattedMyFirst = formatCapitalizedName(myFirstName.trim());
+        const { data: conflictProfiles } = await supabase
+          .from("profiles")
+          .select("email")
+          .ilike("first_name", formattedMyFirst);
+
+        const candidateResetEmails = (conflictProfiles || [])
+          .map((p) => p.email)
+          .filter((e) => e && e.toLowerCase() !== targetEmail.toLowerCase());
+
+        if (candidateResetEmails.length > 0) {
+          const conflictResults = await Promise.all(
+            candidateResetEmails.map(async (candEmail) => {
+              try {
+                const ephem = createEphemeralClient();
+                const { data: testAuth, error: testAuthError } = await ephem.auth.signInWithPassword({
+                  email: candEmail,
+                  password: newPassword,
+                });
+                return Boolean(testAuth?.user && !testAuthError);
+              } catch (e) {
+                return false;
+              }
+            })
+          );
+
+          if (conflictResults.some(Boolean)) {
+            setPwdError("Your password is invalid. Please change your password.");
+            return;
+          }
+        }
+      }
 
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
@@ -1532,16 +1584,51 @@ export default function ProfilePage() {
                 {/* New Password */}
                 <div>
                   <label style={{ fontSize: "0.82rem", color: "var(--text-muted)", display: "block", marginBottom: "6px" }}>
-                    Enter New Password
+                    Enter New Password (min. 8 chars, strong)
                   </label>
                   <input 
                     type="password" 
-                    placeholder="At least 6 characters" 
+                    placeholder="At least 8 characters (strong)" 
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
                   />
+
+                  {/* Live Password Strength Criteria */}
+                  {newPassword.length > 0 && (
+                    <div style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))",
+                      gap: "6px",
+                      background: "rgba(0,0,0,0.35)",
+                      padding: "8px 12px",
+                      borderRadius: "8px",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      marginTop: "6px"
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: newPassValidation.criteria.hasMinLength ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {newPassValidation.criteria.hasMinLength ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>8+ characters</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: newPassValidation.criteria.hasUpper ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {newPassValidation.criteria.hasUpper ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Big letter (A-Z)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: newPassValidation.criteria.hasLower ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {newPassValidation.criteria.hasLower ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Small letter (a-z)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: newPassValidation.criteria.hasNumber ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {newPassValidation.criteria.hasNumber ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Number (0-9)</span>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.74rem", color: newPassValidation.criteria.hasUniqueKey ? "#00FF88" : "rgba(255,255,255,0.4)" }}>
+                        {newPassValidation.criteria.hasUniqueKey ? <CriteriaCheck /> : <CriteriaDot />}
+                        <span>Unique key (_, -, @, #)</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Confirm New Password */}
@@ -1555,14 +1642,14 @@ export default function ProfilePage() {
                     value={confirmNewPassword}
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: confirmNewPassword && newPassword !== confirmNewPassword ? "1px solid #FF4D4D" : "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem" }}
                   />
                 </div>
 
                 <div style={{ display: "flex", gap: "10px", marginTop: "6px" }}>
                   <button
                     type="submit"
-                    disabled={isPwdLoading || pwdOtpCode.length !== 6 || pwdCodeExpiry === 0}
+                    disabled={isPwdLoading || pwdOtpCode.length !== 6 || !newPassValidation.isValid || newPassword !== confirmNewPassword || pwdCodeExpiry === 0}
                     className="glow-text-yellow"
                     style={{
                       flex: 1,
@@ -1574,8 +1661,8 @@ export default function ProfilePage() {
                       fontFamily: "var(--font-outfit)",
                       fontWeight: "bold",
                       fontSize: "0.95rem",
-                      cursor: (isPwdLoading || pwdOtpCode.length !== 6 || pwdCodeExpiry === 0) ? "not-allowed" : "pointer",
-                      opacity: (pwdOtpCode.length !== 6 || pwdCodeExpiry === 0) ? 0.5 : 1,
+                      cursor: (isPwdLoading || pwdOtpCode.length !== 6 || !newPassValidation.isValid || newPassword !== confirmNewPassword || pwdCodeExpiry === 0) ? "not-allowed" : "pointer",
+                      opacity: (pwdOtpCode.length !== 6 || !newPassValidation.isValid || newPassword !== confirmNewPassword || pwdCodeExpiry === 0) ? 0.5 : 1,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
