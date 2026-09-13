@@ -116,7 +116,7 @@ function DevotionStreakHeart({
   streak?: number;
   size?: number; 
 }) {
-  // If restored today, show Restored Heart (❤️‍🩹 Glowing Heart with Medical Bandage & Cross)
+  // If restored today, show Restored Heart (Glowing Heart with Medical Bandage & Cross)
   if (isRestoredToday) {
     return (
       <svg 
@@ -165,7 +165,7 @@ function DevotionStreakHeart({
 
   if (completedToday) {
     if (streak > 365) {
-      // 365+ days: Fiery Red Heart ❤️🔥
+      // 365+ days: Fiery Red Heart
       return (
         <svg 
           width={size} 
@@ -1130,8 +1130,8 @@ export default function DevotionPage() {
         <h2 style={{ color: "var(--neon-white)", fontSize: "1.1rem", marginTop: "10px", fontFamily: "var(--font-outfit)", fontStyle: "italic" }}>
           Spend time with God and write your reflections.
         </h2>
-        <p style={{ color: "rgba(255, 255, 255, 0.72)", fontSize: "0.85rem", marginTop: "6px", marginBottom: "0", fontFamily: "var(--font-outfit)" }}>
-          🔒 Don&apos;t worry, admins can&apos;t see your personal time with God. Your devotions and reflections are completely private.
+        <p style={{ color: "#00FF80", fontSize: "0.85rem", marginTop: "6px", marginBottom: "0", fontFamily: "var(--font-outfit)" }}>
+          Don&apos;t worry, admins can&apos;t see your personal time with God. Your devotions and reflections are completely private.
         </p>
         {currentUser && (
           <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginTop: "10px", padding: "6px 14px", background: "rgba(255,255,255,0.05)", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.1)" }}>
@@ -1580,7 +1580,7 @@ export default function DevotionPage() {
                         transition: "all 0.2s ease"
                       }}
                     >
-                      ✍️ Text
+                      Text
                     </button>
                     <button
                       type="button"
@@ -1598,7 +1598,7 @@ export default function DevotionPage() {
                         transition: "all 0.2s ease"
                       }}
                     >
-                      📷 Pictures {reflectionImage ? "• Attached" : ""}
+                      Pictures {reflectionImage ? "(Attached)" : ""}
                     </button>
                   </div>
 
@@ -1650,7 +1650,6 @@ export default function DevotionPage() {
                             gap: "14px"
                           }}
                         >
-                          <div style={{ fontSize: "2.2rem" }}>📸</div>
                           <div>
                             <div style={{ color: "var(--neon-white)", fontWeight: "bold", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>
                               Add a Photo Reflection
@@ -1682,7 +1681,7 @@ export default function DevotionPage() {
                               onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 234, 0, 0.2)")}
                               onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 234, 0, 0.1)")}
                             >
-                              📁 Upload Picture
+                              Upload Picture
                             </button>
 
                             <button
@@ -1706,13 +1705,13 @@ export default function DevotionPage() {
                               onMouseOver={(e) => (e.currentTarget.style.background = "rgba(0, 255, 128, 0.2)")}
                               onMouseOut={(e) => (e.currentTarget.style.background = "rgba(0, 255, 128, 0.1)")}
                             >
-                              📷 Take a Picture
+                              Take a Picture
                             </button>
                           </div>
 
                           {isProcessingImage && (
                             <div style={{ color: "var(--neon-yellow)", fontSize: "0.85rem", fontStyle: "italic" }}>
-                              ⏳ Processing and optimizing image...
+                              Processing and optimizing image...
                             </div>
                           )}
                         </div>
@@ -1761,7 +1760,7 @@ export default function DevotionPage() {
                                   cursor: "pointer"
                                 }}
                               >
-                                📁 Change Picture
+                                Change Picture
                               </button>
                               <button
                                 type="button"
@@ -1776,7 +1775,7 @@ export default function DevotionPage() {
                                   cursor: "pointer"
                                 }}
                               >
-                                📷 Retake
+                                Retake
                               </button>
                             </div>
 
@@ -1793,7 +1792,7 @@ export default function DevotionPage() {
                                 cursor: "pointer"
                               }}
                             >
-                              🗑️ Remove Picture
+                              Remove Picture
                             </button>
                           </div>
 
@@ -1933,7 +1932,7 @@ export default function DevotionPage() {
                 transition: "all 0.2s"
               }}
             >
-              {isSaving ? "Saving to Cloud..." : isSaved ? "Saved! Streak Active 💛" : "Save Journal"}
+              {isSaving ? "Saving to Cloud..." : isSaved ? "Saved! Streak Active" : "Save Journal"}
             </button>
           </div>
         </section>
@@ -2054,7 +2053,7 @@ export default function DevotionPage() {
                             fontWeight: "bold",
                             fontFamily: "var(--font-outfit)"
                           }}>
-                            📷 Photo
+                            Photo
                           </span>
                         )}
                       </div>
