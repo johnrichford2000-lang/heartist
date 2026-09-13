@@ -353,13 +353,25 @@ export default function LoginPage() {
     try {
       let emailToUse = loginIdentifier.trim();
       
-      // If it doesn't look like an email, assume it's a first name
+      // If it doesn't look like an email, assume it's a first name / username
       if (!emailToUse.includes("@")) {
-        const { data: profile, error: lookupError } = await supabase
+        // Validation: Username / First Name must start with a Capital letter (Big Letter).
+        // Reject if user entered small letter.
+        const words = emailToUse.split(/\s+/).filter(Boolean);
+        const hasSmallStart = words.some(w => /^[a-zñ]/.test(w));
+        
+        if (hasSmallStart) {
+          setError("Username / First Name must start with a Capital letter (Big Letter, halimbawa: 'Richford'). Hindi tinatanggap ang small letters.");
+          return;
+        }
+
+        const { data: profiles, error: lookupError } = await supabase
           .from("profiles")
-          .select("email")
+          .select("email, first_name")
           .ilike("first_name", emailToUse)
-          .single();
+          .limit(1);
+          
+        const profile = profiles && profiles.length > 0 ? profiles[0] : null;
           
         if (profile && profile.email) {
           emailToUse = profile.email;
