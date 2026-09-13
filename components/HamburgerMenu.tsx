@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import HeartistLogo from "./HeartistLogo";
 import { supabase } from "@/lib/supabase";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 export default function HamburgerMenu() {
   const pathname = usePathname();
@@ -88,7 +89,15 @@ export default function HamburgerMenu() {
             setIsLoggedIn(true);
             setIsAdmin(!!adminLog);
             if (auStr) {
-               setActiveUser(JSON.parse(auStr));
+               try {
+                 const parsed = JSON.parse(auStr);
+                 if (parsed.firstName) parsed.firstName = formatCapitalizedName(parsed.firstName);
+                 if (parsed.middleName) parsed.middleName = formatCapitalizedName(parsed.middleName);
+                 if (parsed.lastName) parsed.lastName = formatCapitalizedName(parsed.lastName);
+                 setActiveUser(parsed);
+               } catch (e) {
+                 setActiveUser(JSON.parse(auStr));
+               }
             } else if (adminLog) {
                // Fallback just in case
                setActiveUser({ firstName: "Admin", lastName: "", avatar: "👑" });
@@ -187,15 +196,15 @@ export default function HamburgerMenu() {
           <div style={{ display: "block", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "20px", marginBottom: "20px" }}>
             <Link href={isAdmin ? "/admin" : "/profile"} onClick={() => setIsOpen(false)} style={{ textDecoration: "none", color: "inherit" }}>
               <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "80px", height: "80px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem", background: "rgba(255,234,0,0.1)", borderRadius: "50%", padding: "0", border: `2px solid ${(() => { const accounts = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('registeredAccounts') || '[]') : []; const match = accounts.find((a: any) => a.firstName === activeUser?.firstName && a.lastName === activeUser?.lastName); return (match?.team && match.team !== 'none') ? match.team : (activeUser?.team && activeUser.team !== 'none' ? activeUser.team : 'transparent'); })()}`, overflow: "hidden" }}>
+                <div style={{ width: "80px", height: "80px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem", background: "rgba(255,234,0,0.1)", borderRadius: "50%", padding: "0", border: `2px solid ${(() => { const accounts = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('registeredAccounts') || '[]') : []; const match = accounts.find((a: any) => (a.firstName || '').toLowerCase() === (activeUser?.firstName || '').toLowerCase() && (a.lastName || '').toLowerCase() === (activeUser?.lastName || '').toLowerCase()); return (match?.team && match.team !== 'none') ? match.team : (activeUser?.team && activeUser.team !== 'none' ? activeUser.team : 'transparent'); })()}`, overflow: "hidden" }}>
                   {(activeUser.avatar && activeUser.avatar.length > 10) ? (
                     <img src={activeUser.avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                   ) : (
       "👤"
   )}
                 </div>
-                <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.3rem", textAlign: "center", margin: 0 }}>
-                  {activeUser.firstName}
+                <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.3rem", textAlign: "center", margin: 0, textTransform: "capitalize" }}>
+                  {formatCapitalizedName(activeUser.firstName || "")}
                 </h2>
                 <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>
                   {isAdmin ? "Admin View" : "View Profile"}
