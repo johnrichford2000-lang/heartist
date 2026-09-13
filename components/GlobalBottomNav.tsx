@@ -62,11 +62,24 @@ export default function GlobalBottomNav() {
           if (currentUserObj.id || currentUsername) {
             const badgeClearedAt = Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0);
             const badgeClearedIso = new Date(badgeClearedAt).toISOString();
+
+            let userUuid = currentUserObj.id;
+            if (!userUuid || !userUuid.includes("-")) {
+              const rawAccs = JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
+              const found = rawAccs.find((a: any) => 
+                (currentUsername && a.firstName?.toLowerCase() === currentUsername?.toLowerCase()) &&
+                (currentUserObj.lastName && a.lastName?.toLowerCase() === currentUserObj.lastName?.toLowerCase())
+              );
+              if (found?.id) userUuid = found.id;
+            }
+
             const targetRecipientIds = Array.from(new Set([
               currentUserObj.id,
+              userUuid,
               currentUsername,
               `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim(),
-              currentUsername?.toLowerCase()
+              currentUsername?.toLowerCase(),
+              currentUserObj.email?.toLowerCase()
             ])).filter(Boolean);
 
             const { count } = await supabase

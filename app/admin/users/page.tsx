@@ -7,7 +7,7 @@ import HeartistLogo from "@/components/HeartistLogo";
 import AdminBottomNav from "@/components/AdminBottomNav";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
-import BadgeIcon, { BadgePill, BADGE_DEFINITIONS, getBadgeDefinition } from "@/components/BadgeIcon";
+import BadgeIcon, { BadgePill, BADGE_DEFINITIONS, getBadgeDefinition, normalizeBadgeId } from "@/components/BadgeIcon";
 
 const ROLES = BADGE_DEFINITIONS;
 
@@ -135,7 +135,7 @@ export default function AdminUsersPage() {
         // Send unified notification if badge or team color changed
         const mBadge = manageUser.badge || "first-timer";
         const mTeam = manageUser.team || "none";
-        const badgeChanged = mBadge !== editBadge;
+        const badgeChanged = normalizeBadgeId(mBadge) !== normalizeBadgeId(editBadge);
         const teamChanged = mTeam !== editTeam;
 
         if (badgeChanged || teamChanged) {
@@ -164,7 +164,7 @@ export default function AdminUsersPage() {
             postContent: badgeDef.label,
             timestamp: Date.now(),
             read: false,
-            postId: "profile",
+            postId: null,
             userId: manageUser.id,
             recipient_id: manageUser.id,
             badge: editBadge,
@@ -180,17 +180,31 @@ export default function AdminUsersPage() {
 
           notifs.push(notifItem);
 
-          // 1. Insert into Supabase notifications table for user ID
+          // 1. Insert into Supabase notifications table for user ID and Full Name with post_id: null (prevent uuid syntax error)
           try {
-            await supabase.from('notifications').insert([{
-              sender_id: "admin",
-              sender_name: adminName,
-              recipient_id: manageUser.id,
-              type: notifItem.type,
-              message: JSON.stringify(notifItem),
-              is_read: false,
-              post_id: "profile"
-            }]);
+            const rowsToInsert: any[] = [
+              {
+                sender_id: "admin",
+                sender_name: adminName,
+                recipient_id: manageUser.id,
+                type: notifItem.type,
+                message: JSON.stringify(notifItem),
+                is_read: false,
+                post_id: null
+              }
+            ];
+            if (targetUserName && targetUserName !== manageUser.id) {
+              rowsToInsert.push({
+                sender_id: "admin",
+                sender_name: adminName,
+                recipient_id: targetUserName,
+                type: notifItem.type,
+                message: JSON.stringify(notifItem),
+                is_read: false,
+                post_id: null
+              });
+            }
+            await supabase.from('notifications').insert(rowsToInsert);
           } catch (err) {
             console.error("Error inserting notification", err);
           }

@@ -41,18 +41,30 @@ export default function NotificationsPage() {
 
       const fetchInbox = async () => {
           try {
+              let userUuid = currentUserObj.id;
+              if (!userUuid || !userUuid.includes("-")) {
+                const foundAcc = accs.find((a: any) => 
+                  (currentUser && a.firstName?.toLowerCase() === currentUser?.toLowerCase()) &&
+                  (currentUserObj.lastName && a.lastName?.toLowerCase() === currentUserObj.lastName?.toLowerCase())
+                );
+                if (foundAcc?.id) userUuid = foundAcc.id;
+              }
+
               const targetIds = Array.from(new Set([
                 currentUserObj.id,
+                userUuid,
                 currentUser,
                 currentUserFullName,
                 currentUser?.toLowerCase(),
-                currentUserFullName?.toLowerCase()
+                currentUserFullName?.toLowerCase(),
+                currentUserObj.email?.toLowerCase()
               ])).filter(Boolean);
 
               const { data: directData } = await supabase.from('notifications').select('*').in('recipient_id', targetIds).order('created_at', { ascending: false });
               const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
               
               const seenMsgIds = new Set<string>();
+              const seenPayloadIds = new Set<string>();
               const rawData = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
               const data = rawData.filter((msg: any) => {
                 if (seenMsgIds.has(msg.id)) return false;
@@ -109,9 +121,13 @@ export default function NotificationsPage() {
                  } else {
                    try {
                      const parsedNotif = JSON.parse(msg.message);
-                     parsedNotif.supabase_id = msg.id;
-                     parsedNotif.read = msg.is_read;
-                     regularNotifs.push(parsedNotif);
+                     const pKey = parsedNotif.id || `${parsedNotif.type}_${parsedNotif.timestamp}`;
+                     if (!seenPayloadIds.has(pKey)) {
+                       seenPayloadIds.add(pKey);
+                       parsedNotif.supabase_id = msg.id;
+                       parsedNotif.read = msg.is_read;
+                       regularNotifs.push(parsedNotif);
+                     }
                    } catch(e) {}
                  }
                });
@@ -161,6 +177,7 @@ export default function NotificationsPage() {
                regularNotifs.forEach((n: any) => {
                  if (
                    (n.type === "badge_update" ||
+                     n.type === "badge_and_team_update" ||
                      n.type === "team_add" ||
                      n.type === "team_remove" ||
                      n.type === "prayer_deleted" ||
@@ -176,6 +193,7 @@ export default function NotificationsPage() {
 
                const myNotifs = regularNotifs.filter(
                  (n: any) =>
+                   n.supabase_id ||
                    n.postAuthor === currentUser ||
                    n.postAuthor === currentUserFullName ||
                    n.postAuthor === currentUserObj?.id ||

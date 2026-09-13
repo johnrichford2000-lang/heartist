@@ -31,15 +31,14 @@ export default function NotificationListener() {
       try {
         const pUser = JSON.parse(activeStr);
         const isTargetUser = 
-          (n.userId && n.userId === pUser.id) ||
-          (n.recipient_id && (n.recipient_id === pUser.id || n.recipient_id === pUser.firstName)) ||
+          (n.userId && (n.userId === pUser.id || n.userId === `${pUser.firstName} ${pUser.lastName}`.trim() || n.userId === pUser.firstName)) ||
+          (n.recipient_id && (n.recipient_id === pUser.id || n.recipient_id === `${pUser.firstName} ${pUser.lastName}`.trim() || n.recipient_id === pUser.firstName)) ||
           (n.postAuthor && (n.postAuthor === `${pUser.firstName} ${pUser.lastName}`.trim() || n.postAuthor === pUser.firstName));
 
-        if (isTargetUser && n.badge) {
-          const badgeDef = getBadgeDefinition(n.badge);
-          
+        if (isTargetUser) {
           // Update activeUser cache immediately
-          pUser.badge = n.badge;
+          if (n.badge) pUser.badge = n.badge;
+          if (n.team !== undefined) pUser.team = n.team;
           localStorage.setItem("activeUser", JSON.stringify(pUser));
           
           // Update registeredAccounts cache
@@ -49,19 +48,22 @@ export default function NotificationListener() {
               const accs = JSON.parse(accsStr);
               const match = accs.find((a: any) => (a.firstName || '').toLowerCase() === (pUser.firstName || '').toLowerCase());
               if (match) {
-                match.badge = n.badge;
+                if (n.badge) match.badge = n.badge;
+                if (n.team !== undefined) match.team = n.team;
                 localStorage.setItem("registeredAccounts", JSON.stringify(accs));
               }
             } catch(e) {}
           }
 
-          // Trigger live toast notification
-          setBadgeToast({
-            badge: n.badge,
-            badgeLabel: badgeDef.label,
-            badgeColor: badgeDef.color,
-            adminName: n.adminName || n.users?.[0] || "Admin"
-          });
+          if (n.badge) {
+            const badgeDef = getBadgeDefinition(n.badge);
+            setBadgeToast({
+              badge: n.badge,
+              badgeLabel: badgeDef.label,
+              badgeColor: badgeDef.color,
+              adminName: n.adminName || n.users?.[0] || "Admin"
+            });
+          }
 
           window.dispatchEvent(new Event("storage"));
           window.dispatchEvent(new CustomEvent("badge_updated", { detail: n }));
@@ -95,8 +97,8 @@ export default function NotificationListener() {
             }
           }
 
-          // Check if this is a badge update for the active user
-          if (n.type === "badge_update") {
+          // Check if this is a badge or team update for the active user
+          if (n.type === "badge_update" || n.type === "badge_and_team_update" || n.type?.includes("badge") || n.type?.includes("team")) {
             handleBadgeNotification(n);
           }
           
@@ -112,7 +114,7 @@ export default function NotificationListener() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         try {
           const newRow = payload.new;
-          if (newRow && newRow.type === "badge_update" && newRow.message) {
+          if (newRow && (newRow.type === "badge_update" || newRow.type === "badge_and_team_update" || newRow.type?.includes("badge") || newRow.type?.includes("team")) && newRow.message) {
             try {
               const parsed = JSON.parse(newRow.message);
               handleBadgeNotification(parsed);
