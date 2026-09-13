@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import HeartistLogo from "./HeartistLogo";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+import BadgeIcon, { BadgePill, getBadgeDefinition } from "@/components/BadgeIcon";
 
 export default function HamburgerMenu() {
   const pathname = usePathname();
@@ -100,7 +101,7 @@ export default function HamburgerMenu() {
                }
             } else if (adminLog) {
                // Fallback just in case
-               setActiveUser({ firstName: "Admin", lastName: "", avatar: "👑" });
+               setActiveUser({ firstName: "Admin", lastName: "", avatar: "", badge: "Admin" });
             }
           } else {
             setIsLoggedIn(false);
@@ -192,27 +193,80 @@ export default function HamburgerMenu() {
 
       {/* Sidebar Content */}
       <div className={`sidebar ${isOpen ? "open" : ""}`}>
-        {isLoggedIn && activeUser ? (
-          <div style={{ display: "block", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "20px", marginBottom: "20px" }}>
-            <Link href={isAdmin ? "/admin" : "/profile"} onClick={() => setIsOpen(false)} style={{ textDecoration: "none", color: "inherit" }}>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "10px" }}>
-                <div style={{ width: "80px", height: "80px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem", background: "rgba(255,234,0,0.1)", borderRadius: "50%", padding: "0", border: `2px solid ${(() => { const accounts = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('registeredAccounts') || '[]') : []; const match = accounts.find((a: any) => (a.firstName || '').toLowerCase() === (activeUser?.firstName || '').toLowerCase() && (a.lastName || '').toLowerCase() === (activeUser?.lastName || '').toLowerCase()); return (match?.team && match.team !== 'none') ? match.team : (activeUser?.team && activeUser.team !== 'none' ? activeUser.team : 'transparent'); })()}`, overflow: "hidden" }}>
-                  {(activeUser.avatar && activeUser.avatar.length > 10) ? (
-                    <img src={activeUser.avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-      "👤"
-  )}
+        {isLoggedIn && activeUser ? (() => {
+          const userBadge = isAdmin ? "Admin" : (activeUser.badge || "first-timer");
+          const badgeDef = getBadgeDefinition(userBadge);
+          const teamColor = (() => {
+            const accounts = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem('registeredAccounts') || '[]') : [];
+            const match = accounts.find((a: any) => (a.firstName || '').toLowerCase() === (activeUser?.firstName || '').toLowerCase() && (a.lastName || '').toLowerCase() === (activeUser?.lastName || '').toLowerCase());
+            return (match?.team && match.team !== 'none') ? match.team : (activeUser?.team && activeUser.team !== 'none' ? activeUser.team : 'transparent');
+          })();
+
+          return (
+            <div style={{ display: "block", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "20px", marginBottom: "20px" }}>
+              <Link href={isAdmin ? "/admin" : "/profile"} onClick={() => setIsOpen(false)} style={{ textDecoration: "none", color: "inherit" }}>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
+                  <div style={{ position: "relative" }}>
+                    <div style={{
+                      width: "80px",
+                      height: "80px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      background: "rgba(255,234,0,0.08)",
+                      borderRadius: "50%",
+                      padding: "0",
+                      border: `2px solid ${teamColor !== 'transparent' ? teamColor : 'rgba(255,255,255,0.2)'}`,
+                      overflow: "hidden"
+                    }}>
+                      {(activeUser.avatar && activeUser.avatar.length > 10) ? (
+                        <img src={activeUser.avatar} alt="Avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : (
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.6)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                          <circle cx="12" cy="7" r="4" />
+                        </svg>
+                      )}
+                    </div>
+                    {/* Badge Icon Corner Pin */}
+                    <div 
+                      style={{
+                        position: "absolute",
+                        bottom: "-2px",
+                        right: "-2px",
+                        width: "26px",
+                        height: "26px",
+                        borderRadius: "50%",
+                        background: "#111115",
+                        border: `2px solid ${badgeDef.color}`,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: `0 0 8px ${badgeDef.color}40`
+                      }} 
+                      title={badgeDef.label}
+                    >
+                      <BadgeIcon badge={userBadge} size={14} color={badgeDef.color} />
+                    </div>
+                  </div>
+
+                  <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.3rem", textAlign: "center", margin: 0, textTransform: "capitalize" }}>
+                    {formatCapitalizedName(activeUser.firstName || "")}
+                  </h2>
+
+                  {/* Prominent Badge Display */}
+                  <div style={{ marginTop: "2px", marginBottom: "2px" }}>
+                    <BadgePill badge={userBadge} size={14} />
+                  </div>
+
+                  <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>
+                    {isAdmin ? "Admin View" : "View Profile"}
+                  </span>
                 </div>
-                <h2 className="glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.3rem", textAlign: "center", margin: 0, textTransform: "capitalize" }}>
-                  {formatCapitalizedName(activeUser.firstName || "")}
-                </h2>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)" }}>
-                  {isAdmin ? "Admin View" : "View Profile"}
-                </span>
-              </div>
-            </Link>
-          </div>
-        ) : (
+              </Link>
+            </div>
+          );
+        })() : (
           <div className="sidebar-header">
             <HeartistLogo width={25} height={25} className="animated-glow-text" />
             <h2 className="animated-glow-text" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.5rem" }}>EARTIST</h2>

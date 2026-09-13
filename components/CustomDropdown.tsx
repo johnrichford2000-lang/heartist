@@ -5,7 +5,8 @@ import { useState, useRef, useEffect } from "react";
 export interface DropdownOption {
   value: string;
   label: string;
-  renderLabel?: React.ReactNode;
+  renderLabel?: React.ReactNode | ((isSelected: boolean) => React.ReactNode);
+  color?: string;
 }
 
 interface CustomDropdownProps {
@@ -32,6 +33,11 @@ export default function CustomDropdown({ options, value, onChange, placeholder, 
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const triggerColor = selectedOption?.color || "white";
+  const triggerBorder = isOpen
+    ? (selectedOption?.color ? `1px solid ${selectedOption.color}` : "1px solid var(--neon-yellow)")
+    : (selectedOption?.color ? `1px solid ${selectedOption.color}80` : "1px solid rgba(255,255,255,0.2)");
+
   return (
     <div ref={dropdownRef} style={{ position: "relative", width: "100%", ...style }}>
       <div 
@@ -41,8 +47,8 @@ export default function CustomDropdown({ options, value, onChange, placeholder, 
           padding: "12px",
           borderRadius: "8px",
           background: "rgba(0,0,0,0.5)",
-          border: isOpen ? "1px solid var(--neon-yellow)" : "1px solid rgba(255,255,255,0.2)",
-          color: "white",
+          border: triggerBorder,
+          color: triggerColor,
           fontFamily: "var(--font-outfit)",
           cursor: "pointer",
           display: "flex",
@@ -51,8 +57,22 @@ export default function CustomDropdown({ options, value, onChange, placeholder, 
           transition: "all 0.3s ease"
         }}
       >
-        <span>{selectedOption ? (selectedOption.renderLabel || selectedOption.label) : placeholder || "Select Option"}</span>
-        <span style={{ transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.3s ease", fontSize: "0.8rem" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", overflow: "hidden" }}>
+          {selectedOption ? (
+            typeof selectedOption.renderLabel === "function"
+              ? selectedOption.renderLabel(true)
+              : (selectedOption.renderLabel || selectedOption.label)
+          ) : (
+            <span style={{ color: "rgba(255,255,255,0.5)" }}>{placeholder || "Select Option"}</span>
+          )}
+        </div>
+        <span style={{ 
+          transform: isOpen ? "rotate(180deg)" : "rotate(0deg)", 
+          transition: "transform 0.3s ease", 
+          fontSize: "0.8rem",
+          color: selectedOption?.color || "rgba(255,255,255,0.6)",
+          marginLeft: "8px"
+        }}>
           ▼
         </span>
       </div>
@@ -64,39 +84,50 @@ export default function CustomDropdown({ options, value, onChange, placeholder, 
           left: 0,
           right: 0,
           marginTop: "5px",
-          background: "#111",
-          border: "1px solid rgba(255,255,255,0.1)",
+          background: "#111115",
+          border: "1px solid rgba(255,255,255,0.15)",
           borderRadius: "8px",
           overflow: "hidden",
           zIndex: 1000,
-          boxShadow: "0 10px 20px rgba(0,0,0,0.5)"
+          boxShadow: "0 10px 25px rgba(0,0,0,0.7)"
         }}>
-          {options.map((opt) => (
-            <div
-              key={opt.value}
-              onClick={() => {
-                onChange(opt.value);
-                setIsOpen(false);
-              }}
-              style={{
-                padding: "12px",
-                cursor: "pointer",
-                color: value === opt.value ? "var(--neon-yellow)" : "white",
-                background: value === opt.value ? "rgba(255, 234, 0, 0.1)" : "transparent",
-                fontFamily: "var(--font-outfit)",
-                borderBottom: "1px solid rgba(255,255,255,0.05)",
-                transition: "background 0.2s"
-              }}
-              onMouseEnter={(e) => {
-                if (value !== opt.value) e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-              }}
-              onMouseLeave={(e) => {
-                if (value !== opt.value) e.currentTarget.style.background = "transparent";
-              }}
-            >
-              {opt.renderLabel || opt.label}
-            </div>
-          ))}
+          {options.map((opt) => {
+            const isSelected = value === opt.value;
+            const activeColor = opt.color || "var(--neon-yellow)";
+            return (
+              <div
+                key={opt.value}
+                onClick={() => {
+                  onChange(opt.value);
+                  setIsOpen(false);
+                }}
+                style={{
+                  padding: "12px",
+                  cursor: "pointer",
+                  color: isSelected ? activeColor : "white",
+                  background: isSelected 
+                    ? (opt.color ? `${opt.color}22` : "rgba(255, 234, 0, 0.1)") 
+                    : "transparent",
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: isSelected ? "600" : "400",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  transition: "background 0.2s, color 0.2s",
+                  display: "flex",
+                  alignItems: "center"
+                }}
+                onMouseEnter={(e) => {
+                  if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.08)";
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSelected) e.currentTarget.style.background = "transparent";
+                }}
+              >
+                {typeof opt.renderLabel === "function" 
+                  ? opt.renderLabel(isSelected) 
+                  : (opt.renderLabel || opt.label)}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

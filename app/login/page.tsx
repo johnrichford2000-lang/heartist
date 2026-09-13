@@ -6,12 +6,13 @@ import HeartistLogo from "@/components/HeartistLogo";
 import { supabase, createEphemeralClient } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
 import CustomDropdown from "@/components/CustomDropdown";
+import BadgeIcon, { getBadgeDefinition } from "@/components/BadgeIcon";
 
 const DEFAULT_AVATAR = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
 const ROLES = [
-  { id: "first-timer", title: "First-timer", emoji: "", label: "First-timer" },
-  { id: "camp-veteran", title: "Camp Veteran", emoji: "", label: "Camp Veteran" },
-  { id: "supporter", title: "Supporter", emoji: "", label: "Supporter" },
+  { id: "first-timer", title: "First-timer", label: "First-timer", color: "#22C55E" },
+  { id: "camp-veteran", title: "Camp Veteran", label: "Camp Veteran", color: "#F59E0B" },
+  { id: "supporter", title: "Supporter", label: "Supporter", color: "#EC4899" },
 ];
 
 const PasswordEye = ({ show }: { show: boolean }) => (
@@ -1919,12 +1920,19 @@ export default function LoginPage() {
                     options={ROLES.map(r => ({
                       value: r.id,
                       label: r.label,
-                      renderLabel: (
-                        <span style={{ fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                          <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold" }}>
+                      color: r.color,
+                      renderLabel: (isSelected: boolean) => (
+                        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                          <BadgeIcon badge={r.id} size={18} color={r.color} />
+                          <span style={{ 
+                            color: isSelected ? r.color : "#FFFFFF", 
+                            fontWeight: isSelected ? "700" : "500",
+                            fontFamily: "var(--font-outfit)",
+                            transition: "color 0.2s ease"
+                          }}>
                             {r.title}
-                          </strong>
-                        </span>
+                          </span>
+                        </div>
                       )
                     }))}
                     value={regBadge}

@@ -10,6 +10,7 @@ import { supabase, createEphemeralClient } from "@/lib/supabase";
 import { fetchSystemSetting } from "@/lib/fusionSync";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 import { validatePasswordStrength } from "@/utils/passwordValidation";
+import BadgeIcon, { BadgePill, getBadgeDefinition, normalizeBadgeId } from "@/components/BadgeIcon";
 
 const CriteriaCheck = () => (
   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
@@ -25,32 +26,15 @@ const CriteriaDot = () => (
 
 
 const BASE_ROLES = [
-  { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
-  { id: "camp-veteran", title: "Camp Veteran", emoji: "🎖️", label: "Camp Veteran 🎖️" },
-  { id: "supporter", title: "Supporter", emoji: "💖", label: "Supporter 💖" },
+  { id: "first-timer", title: "First-timer", label: "First-timer", color: "#22C55E" },
+  { id: "camp-veteran", title: "Camp Veteran", label: "Camp Veteran", color: "#F59E0B" },
+  { id: "supporter", title: "Supporter", label: "Supporter", color: "#EC4899" },
 ];
-
-const KNOWN_SPECIAL_ROLES: Record<string, { title: string; emoji: string; label: string }> = {
-  "pastor": { title: "Pastor", emoji: "📖", label: "Pastor 📖" },
-  "camp-coordinator": { title: "Camp Coordinator", emoji: "🎯", label: "Camp Coordinator 🎯" },
-  "facilitator": { title: "Facilitator", emoji: "⭐", label: "Facilitator ⭐" },
-  "media-team": { title: "Media Team", emoji: "📸", label: "Media Team 📸" },
-  "music-team": { title: "Music Team", emoji: "🎵", label: "Music Team 🎵" },
-  "dance-ministry": { title: "Dance Ministry", emoji: "💃", label: "Dance Ministry 💃" },
-};
 
 function getRoleBadgeItem(roleId: string) {
   if (!roleId) return BASE_ROLES[0];
-  const base = BASE_ROLES.find(r => r.id === roleId);
-  if (base) return base;
-  if (KNOWN_SPECIAL_ROLES[roleId]) {
-    return { id: roleId, ...KNOWN_SPECIAL_ROLES[roleId] };
-  }
-  const formattedTitle = roleId
-    .split("-")
-    .map(w => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-  return { id: roleId, title: formattedTitle, emoji: "🔰", label: `${formattedTitle} 🔰` };
+  const def = getBadgeDefinition(roleId);
+  return { id: def.id, title: def.label, label: def.label, color: def.color };
 }
 
 function calculateAge(birthDateString: string): number {
@@ -920,12 +904,34 @@ export default function ProfilePage() {
            <h2 style={{ margin: 0, color: "white", fontFamily: "var(--font-outfit)", textAlign: "center" }}>
              {formatCapitalizedName(activeUser.firstName)}{activeUser.middleName ? ` ${formatCapitalizedName(activeUser.middleName)}` : ""} {formatCapitalizedName(activeUser.lastName)}
            </h2>
-            <p style={{ margin: "5px 0", color: "var(--neon-yellow)", fontWeight: "bold" }}>
-              {isAdminProfile ? "Admin 👑" : getRoleBadgeItem(regBadge || activeUser?.badge).label}
-            </p>
-           {activeUser.team && activeUser.team !== 'none' && (
-             <p style={{ margin: 0, color: activeUser.team, textTransform: "capitalize", fontWeight: "bold" }}>Team {activeUser.team}</p>
-           )}
+            {(() => {
+              const currentBadgeId = isAdminProfile ? "Admin" : (regBadge || activeUser?.badge || "first-timer");
+              const badgeDef = getBadgeDefinition(currentBadgeId);
+              return (
+                <div style={{
+                  margin: "8px 0",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "5px 14px",
+                  borderRadius: "20px",
+                  background: `${badgeDef.color}15`,
+                  border: `1px solid ${badgeDef.color}50`,
+                  color: badgeDef.color,
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: "700",
+                  fontSize: "0.95rem",
+                  letterSpacing: "0.3px",
+                  boxShadow: `0 0 12px ${badgeDef.color}25`
+                }}>
+                  <BadgeIcon badge={currentBadgeId} size={18} color={badgeDef.color} />
+                  <span style={{ color: badgeDef.color }}>{badgeDef.label}</span>
+                </div>
+              );
+            })()}
+            {activeUser.team && activeUser.team !== 'none' && (
+              <p style={{ margin: 0, color: activeUser.team, textTransform: "capitalize", fontWeight: "bold" }}>Team {activeUser.team}</p>
+            )}
         </div>
         
         {message && <p style={{ color: "#00FF80", textAlign: "center", fontSize: "0.95rem", marginBottom: "20px", background: "rgba(0,255,128,0.1)", padding: "10px", borderRadius: "8px", border: "1px solid #00FF80" }}>{message}</p>}
@@ -1121,18 +1127,29 @@ export default function ProfilePage() {
                 options={availableBadgeOptions.map(r => ({
                   value: r.id,
                   label: r.label,
-                  renderLabel: (
-                    <span style={{ fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                      <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold", marginRight: "8px" }}>
+                  color: r.color,
+                  renderLabel: (isSelected: boolean) => (
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <BadgeIcon badge={r.id} size={18} color={r.color} />
+                      <span style={{ 
+                        color: isSelected ? r.color : "#FFFFFF", 
+                        fontWeight: isSelected ? "700" : "500",
+                        fontFamily: "var(--font-outfit)",
+                        transition: "color 0.2s ease"
+                      }}>
                         {r.title}
-                      </strong>
-                      <span>{r.emoji}</span>
-                    </span>
+                      </span>
+                    </div>
                   )
                 }))}
                 value={regBadge}
                 onChange={(val) => setRegBadge(val)}
               />
+              <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
+                {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
+                {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
+                {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
+              </p>
             </div>
           )}
 
