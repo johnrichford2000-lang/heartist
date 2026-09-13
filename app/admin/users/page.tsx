@@ -9,15 +9,16 @@ import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 const ROLES = [
-  { id: "first-timer", label: "First timer 🐣", emoji: "🐣" },
-  { id: "camp-veteran", label: "Camp veteran 🎖️", emoji: "🎖️" },
-  { id: "supporter", label: "Supporter 💖", emoji: "💖" },
-  { id: "pastor", label: "Pastor 📖", emoji: "📖" },
-  { id: "camp-coordinator", label: "Camp coordinator 🎯", emoji: "🎯" },
-  { id: "facilitator", label: "Facilitator ⭐", emoji: "⭐" },
-  { id: "media-team", label: "Media team 📸", emoji: "📸" },
-  { id: "music-team", label: "Music team 🎵", emoji: "🎵" },
-  { id: "dance-ministry", label: "Dance ministry 💃", emoji: "💃" }
+  { id: "first-timer", label: "First timer" },
+  { id: "camp-veteran", label: "Camp veteran" },
+  { id: "supporter", label: "Supporter" },
+  { id: "pastor", label: "Pastor" },
+  { id: "camp-coordinator", label: "Camp coordinator" },
+  { id: "facilitator", label: "Facilitator" },
+  { id: "media-team", label: "Media team" },
+  { id: "music-team", label: "Music team" },
+  { id: "dance-ministry", label: "Dance ministry" },
+  { id: "Admin", label: "Admin" }
 ];
 
 const TEAMS = [
@@ -28,6 +29,22 @@ const TEAMS = [
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const [windowOrigin, setWindowOrigin] = useState("");
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setWindowOrigin(window.location.origin);
+    }
+  }, []);
+
+  const handleCopyInviteLink = () => {
+    const origin = windowOrigin || (typeof window !== "undefined" ? window.location.origin : "");
+    const link = `${origin}/login?invite=admin`;
+    navigator.clipboard.writeText(link);
+    setCopyFeedback(true);
+    setTimeout(() => setCopyFeedback(false), 2500);
+  };
   
   // Modals state
   const [manageUser, setManageUser] = useState<any | null>(null);
@@ -381,29 +398,21 @@ export default function AdminUsersPage() {
             right: "-5px",
             background: "var(--bg-dark)",
             borderRadius: "50%",
-            padding: "2px",
+            padding: "4px",
             display: "flex",
             justifyContent: "center",
-            alignItems: "center"
+            alignItems: "center",
+            border: "1px solid rgba(255,255,255,0.2)"
           }}>
-            <span style={{ 
-              display: "block", 
-              width: "24px", 
-              height: "24px", 
-              borderRadius: "50%", 
-              background: "transparent", 
-              color: "white", 
-              fontSize: "12px", 
-              fontWeight: "bold",
-              lineHeight: "24px",
-              textAlign: "center",
-              border: "none",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap"
-            }} title={user.badge || "User"}>
-              {ROLES.find(r => r.id === user.badge)?.emoji || "🔰"}
-            </span>
+            {user.badge === "Admin" || user.badge === "admin" ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" title="Administrator">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--canary-yellow)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" title={user.badge || "User"}>
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+              </svg>
+            )}
           </div>
         </div>
 
@@ -509,6 +518,72 @@ export default function AdminUsersPage() {
       </header>
 
       <section style={{ maxWidth: "800px", margin: "0 auto", padding: "0 10px" }}>
+        {/* Admin Invite Link Action Box */}
+        <div style={{
+          background: "rgba(255, 234, 0, 0.05)",
+          border: "1px solid rgba(255, 234, 0, 0.3)",
+          borderRadius: "12px",
+          padding: "16px 20px",
+          marginBottom: "25px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          flexWrap: "wrap",
+          gap: "15px"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ color: "var(--neon-yellow)" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+              </svg>
+            </div>
+            <div>
+              <h4 style={{ margin: 0, color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", fontSize: "1.05rem" }}>
+                Admin Invite Link
+              </h4>
+              <p style={{ margin: "2px 0 0 0", color: "var(--neon-white)", fontSize: "0.82rem", opacity: 0.85 }}>
+                Share this link to invite and onboard new administrators.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={handleCopyInviteLink}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "8px",
+              padding: "10px 18px",
+              borderRadius: "8px",
+              background: copyFeedback ? "rgba(0, 255, 136, 0.15)" : "var(--neon-yellow)",
+              color: copyFeedback ? "#00FF88" : "#000",
+              border: copyFeedback ? "1px solid #00FF88" : "1px solid var(--neon-yellow)",
+              fontFamily: "var(--font-outfit)",
+              fontWeight: "bold",
+              fontSize: "0.9rem",
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }}
+          >
+            {copyFeedback ? (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                <span>Link Copied!</span>
+              </>
+            ) : (
+              <>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                <span>Copy Admin Invite Link</span>
+              </>
+            )}
+          </button>
+        </div>
         
         {/* Title and Total Badge on same line */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", flexWrap: "wrap", gap: "15px" }}>

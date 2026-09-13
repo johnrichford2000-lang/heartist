@@ -19,6 +19,9 @@ export default function AdminDashboardPage() {
   const [adminEmails, setAdminEmails] = useState<string[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState("");
   const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  const [windowOrigin, setWindowOrigin] = useState("");
   const [openMenuId, setOpenMenuId] = useState<number | null>(null);
   const [activeAnnId, setActiveAnnId] = useState<number | null>(null);
   const [hasUnread, setHasUnread] = useState(false);
@@ -220,6 +223,10 @@ export default function AdminDashboardPage() {
       })
       .subscribe();
 
+    if (typeof window !== "undefined") {
+      setWindowOrigin(window.location.origin);
+    }
+
     loadAnnouncements();
     window.addEventListener("storage", loadAnnouncements);
     window.addEventListener("announcements_updated", loadAnnouncements);
@@ -230,6 +237,22 @@ export default function AdminDashboardPage() {
       supabase.removeChannel(formsChannel);
     };
   }, []);
+
+  const handleCopyInviteLink = (targetEmail?: string) => {
+    if (typeof window === "undefined") return;
+    const origin = window.location.origin;
+    const link = targetEmail 
+      ? `${origin}/login?invite=admin&email=${encodeURIComponent(targetEmail)}`
+      : `${origin}/login?invite=admin`;
+    navigator.clipboard.writeText(link);
+    if (targetEmail) {
+      setCopiedEmail(targetEmail);
+      setTimeout(() => setCopiedEmail(null), 2500);
+    } else {
+      setCopyFeedback("Invite link copied to clipboard!");
+      setTimeout(() => setCopyFeedback(null), 2500);
+    }
+  };
 
   const handlePostAnnouncement = async () => {
     if (!newAnnouncement.trim()) return;
@@ -345,8 +368,13 @@ export default function AdminDashboardPage() {
         }}
       >
         <h2 style={{ margin: "0 0 20px 0", color: "var(--neon-white)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <span style={{ position: "relative" }}>
-            📢 Announcements
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: "8px" }}>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--neon-yellow)" }}>
+              <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path>
+              <path d="m3 11 18-5v12L3 13v-2z"></path>
+              <path d="M11.6 16.8 9.5 21"></path>
+            </svg>
+            Announcements
             {hasUnread && (
               <span style={{ position: "absolute", top: "-5px", right: "-15px", width: "12px", height: "12px", background: "red", borderRadius: "50%", zIndex: 20 }}></span>
             )}
@@ -489,7 +517,12 @@ export default function AdminDashboardPage() {
                           className={ann.isFusionCountdown ? "fusion-countdown-box" : ""}
                         >
                           {ann.isFeatured && (
-                            <div style={{ position: "absolute", top: "clamp(-10px, -2vw, -15px)", right: "clamp(10px, 3vw, 20px)", fontSize: "clamp(1.4rem, 4vw, 1.8rem)", zIndex: 5, textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>📌</div>
+                            <div style={{ position: "absolute", top: "clamp(-10px, -2vw, -15px)", right: "clamp(10px, 3vw, 20px)", zIndex: 5, color: "#ff3366", filter: "drop-shadow(0 2px 4px rgba(0,0,0,0.5))" }}>
+                              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
+                                <line x1="12" y1="17" x2="12" y2="22"></line>
+                                <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6a3 3 0 0 0-6 0v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+                              </svg>
+                            </div>
                           )}
                           <div style={{ minWidth: 0, width: "100%" }}>
                             {ann.isRegistrationAnnouncement || ann.isPackingListAnnouncement || ann.isItineraryAnnouncement ? (
@@ -706,15 +739,82 @@ export default function AdminDashboardPage() {
         )}
       </section>
 
-      {/* Security Settings Section */}
+      {/* Security Settings & Admin Invite Link Section */}
       <section className="card" style={{ maxWidth: "1000px", margin: "40px auto 0", padding: "30px", background: "var(--bg-card)", borderTop: "3px solid #ff3366" }}>
-        <h3 style={{ color: "var(--neon-white)", fontSize: "1.5rem", fontFamily: "var(--font-outfit)", marginBottom: "20px" }}>
-          Security Settings (Admin Access)
+        <h3 style={{ color: "var(--neon-white)", fontSize: "1.5rem", fontFamily: "var(--font-outfit)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "10px" }}>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+          Security Settings & Admin Invites
         </h3>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "20px" }}>
-          Manage the email addresses that have administrative access to the system. These emails cannot be used to register as normal users.
+        <p style={{ color: "var(--text-muted)", fontSize: "0.9rem", marginBottom: "25px", lineHeight: "1.5" }}>
+          Pamahalaan ang mga email addresses ng mga administrator at ibahagi ang invite link para sa mga magiging admin.
         </p>
-        
+
+        {/* Dedicated Admin Invite Link Box */}
+        <div style={{ background: "rgba(255, 234, 0, 0.05)", border: "1px solid var(--neon-yellow)", borderRadius: "12px", padding: "20px", marginBottom: "30px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "8px" }}>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+            </svg>
+            <h4 style={{ margin: 0, color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", fontSize: "1.1rem" }}>
+              Admin Invite Link
+            </h4>
+          </div>
+          <p style={{ color: "var(--neon-white)", fontSize: "0.85rem", margin: "0 0 15px 0", lineHeight: "1.5" }}>
+            I-copy ang link na ito at ibigay sa prospective admin upang makapag-rehistro sila nang direkta na may Administrator privileges.
+          </p>
+
+          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
+            <input 
+              type="text" 
+              readOnly 
+              value={windowOrigin ? `${windowOrigin}/login?invite=admin` : "/login?invite=admin"} 
+              style={{ 
+                flex: 1, 
+                minWidth: "240px", 
+                padding: "12px 15px", 
+                background: "rgba(0, 0, 0, 0.5)", 
+                border: "1px solid rgba(255, 234, 0, 0.3)", 
+                borderRadius: "8px", 
+                color: "var(--neon-white)", 
+                fontFamily: "monospace", 
+                fontSize: "0.9rem",
+                outline: "none"
+              }}
+            />
+            <button 
+              onClick={() => handleCopyInviteLink()}
+              style={{ 
+                display: "inline-flex", 
+                alignItems: "center", 
+                gap: "8px", 
+                padding: "12px 20px", 
+                background: "var(--neon-yellow)", 
+                color: "black", 
+                border: "none", 
+                borderRadius: "8px", 
+                fontWeight: "bold", 
+                fontFamily: "var(--font-outfit)",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              {copyFeedback ? copyFeedback : "Copy Invite Link"}
+            </button>
+          </div>
+        </div>
+
+        {/* Add New Admin Email Form */}
+        <h4 style={{ color: "var(--neon-white)", fontSize: "1.1rem", fontFamily: "var(--font-outfit)", margin: "0 0 12px 0" }}>
+          Authorized Admin Email Addresses
+        </h4>
         <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
           <input 
             type="email" 
@@ -732,18 +832,45 @@ export default function AdminDashboardPage() {
           </button>
         </div>
 
+        {/* List of Admin Emails with Copy Personal Link & Remove Buttons */}
         <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
           {adminEmails.map((email) => (
-            <div key={email} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)" }}>
+            <div key={email} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "15px", background: "rgba(255,255,255,0.05)", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.1)", flexWrap: "wrap", gap: "10px" }}>
               <span style={{ color: "white", fontWeight: "bold" }}>{email}</span>
-              <button 
-                onClick={() => handleRemoveAdminEmail(email)}
-                style={{ background: "transparent", border: "1px solid #FF4444", color: "#FF4444", padding: "6px 15px", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem", transition: "all 0.2s" }}
-                onMouseOver={(e) => { e.currentTarget.style.background = "#FF4444"; e.currentTarget.style.color = "white"; }}
-                onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#FF4444"; }}
-              >
-                Remove
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <button
+                  onClick={() => handleCopyInviteLink(email)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    background: "rgba(255, 234, 0, 0.1)",
+                    border: "1px solid var(--neon-yellow)",
+                    color: "var(--neon-yellow)",
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                    fontFamily: "var(--font-outfit)",
+                    transition: "all 0.2s"
+                  }}
+                  title="Copy personalized invite link for this email"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                  {copiedEmail === email ? "Link Copied!" : "Copy Invite"}
+                </button>
+                <button 
+                  onClick={() => handleRemoveAdminEmail(email)}
+                  style={{ background: "transparent", border: "1px solid #FF4444", color: "#FF4444", padding: "6px 15px", borderRadius: "6px", cursor: "pointer", fontSize: "0.85rem", transition: "all 0.2s" }}
+                  onMouseOver={(e) => { e.currentTarget.style.background = "#FF4444"; e.currentTarget.style.color = "white"; }}
+                  onMouseOut={(e) => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.color = "#FF4444"; }}
+                >
+                  Remove
+                </button>
+              </div>
             </div>
           ))}
         </div>

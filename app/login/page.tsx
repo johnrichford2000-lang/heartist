@@ -9,10 +9,26 @@ import CustomDropdown from "@/components/CustomDropdown";
 
 const DEFAULT_AVATAR = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
 const ROLES = [
-  { id: "first-timer", title: "First-timer", emoji: "🐣", label: "First-timer 🐣" },
-  { id: "camp-veteran", title: "Camp Veteran", emoji: "🎖️", label: "Camp Veteran 🎖️" },
-  { id: "supporter", title: "Supporter", emoji: "💖", label: "Supporter 💖" },
+  { id: "first-timer", title: "First-timer", emoji: "", label: "First-timer" },
+  { id: "camp-veteran", title: "Camp Veteran", emoji: "", label: "Camp Veteran" },
+  { id: "supporter", title: "Supporter", emoji: "", label: "Supporter" },
 ];
+
+const PasswordEye = ({ show }: { show: boolean }) => (
+  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: show ? "var(--neon-yellow)" : "rgba(255,255,255,0.4)" }}>
+    {show ? (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    ) : (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+        <line x1="1" y1="1" x2="23" y2="23" />
+      </svg>
+    )}
+  </span>
+);
 
 export function calculateAge(birthDateString: string): number {
   if (!birthDateString) return 0;
@@ -141,6 +157,7 @@ export default function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   
   // Register fields
+  const [isAdminInvite, setIsAdminInvite] = useState(false);
   const [regFirstName, setRegFirstName] = useState("");
   const [regMiddleName, setRegMiddleName] = useState("");
   const [regLastName, setRegLastName] = useState("");
@@ -217,6 +234,15 @@ export default function LoginPage() {
         // Optional: clear the param from URL
         window.history.replaceState({}, document.title, window.location.pathname);
       }
+      const inviteParam = params.get("invite");
+      const emailParam = params.get("email");
+      if (inviteParam === "admin") {
+        setIsAdminInvite(true);
+        setActiveTab("register");
+        if (emailParam) {
+          setRegEmail(decodeURIComponent(emailParam));
+        }
+      }
     }
   }, []);
 
@@ -237,16 +263,17 @@ export default function LoginPage() {
 
     if (!profileData) {
       const meta = user.user_metadata || {};
+      const isUserAdmin = isAdmin || meta.badge === "Admin";
       const newProfile = {
         id: user.id,
-        first_name: isAdmin ? "Admin" : (meta.first_name || ""),
-        last_name: isAdmin ? "" : (meta.last_name || ""),
+        first_name: meta.first_name || (isUserAdmin ? "Admin" : ""),
+        last_name: meta.last_name || "",
         email: user.email || "",
-        age: isAdmin ? "" : (meta.age || (meta.birth_date ? String(calculateAge(meta.birth_date)) : "")),
-        birth_date: isAdmin ? null : (meta.birth_date || null),
-        contact_number: isAdmin ? "" : (meta.contact_number || ""),
-        badge: isAdmin ? "Admin" : (meta.badge || "first-timer"),
-        avatar_url: isAdmin ? "👑" : (meta.avatar_url || DEFAULT_AVATAR)
+        age: meta.age || (meta.birth_date ? String(calculateAge(meta.birth_date)) : ""),
+        birth_date: meta.birth_date || null,
+        contact_number: meta.contact_number || "",
+        badge: isUserAdmin ? "Admin" : (meta.badge || "first-timer"),
+        avatar_url: meta.avatar_url || DEFAULT_AVATAR
       };
 
       const { data: insertedProfile, error: insertError } = await supabase
@@ -313,9 +340,8 @@ export default function LoginPage() {
 
     // Auto-heal admin badge if incorrect
     if (isAdmin && (profileData.badge !== "admin" && profileData.badge !== "Admin")) {
-      await supabase.from("profiles").update({ badge: "Admin", avatar_url: "👑" }).eq("id", profileData.id);
+      await supabase.from("profiles").update({ badge: "Admin" }).eq("id", profileData.id);
       profileData.badge = "Admin";
-      profileData.avatar_url = "👑";
     }
 
     // Keep localStorage activeUser for now as a cache to ease migration of other components
@@ -450,8 +476,10 @@ export default function LoginPage() {
       if (!Array.isArray(adminEmails)) adminEmails = ["heartistrichford@gmail.com"];
       
       if (adminEmails.includes(regEmail.trim())) {
-        setError("This email is reserved for administrators.");
-        return;
+        if (!isAdminInvite) {
+          setError("This email is reserved for administrators. Please use the Admin Invite Link to register.");
+          return;
+        }
       }
 
       // Check if email already exists
@@ -480,7 +508,7 @@ export default function LoginPage() {
             birth_date: regBirthDate,
             age: computedAge > 0 ? String(computedAge) : "",
             contact_number: regContact.trim(),
-            badge: regBadge,
+            badge: isAdminInvite ? "Admin" : regBadge,
             avatar_url: selectedAvatar
           }
         }
@@ -531,6 +559,19 @@ export default function LoginPage() {
       if (verifyError) throw verifyError;
 
       if (data.user) {
+        if (isAdminInvite || data.user.user_metadata?.badge === "Admin") {
+          const { saveSystemSetting } = await import("@/lib/fusionSync");
+          let adminEmails = await fetchSystemSetting("admin_emails");
+          if (typeof adminEmails === "string") {
+            try { adminEmails = JSON.parse(adminEmails); } catch(e) {}
+          }
+          if (!Array.isArray(adminEmails)) adminEmails = ["heartistrichford@gmail.com"];
+          const vEmail = data.user.email || regEmail.trim();
+          if (!adminEmails.includes(vEmail)) {
+            adminEmails.push(vEmail);
+            await saveSystemSetting("admin_emails", adminEmails);
+          }
+        }
         // Ensure user profile is recorded in PostgreSQL profiles table
         await createProfileIfNotExists(data.user);
       }
@@ -551,7 +592,11 @@ export default function LoginPage() {
 
       // Redirect to Login tab with success message
       setActiveTab("login");
-      setMessage("Account verified successfully! Please log in with your email and password to enter.");
+      if (isAdminInvite) {
+        setMessage("Administrator account verified successfully! Please log in with your email and password to access the Admin Dashboard.");
+      } else {
+        setMessage("Account verified successfully! Please log in with your email and password to enter.");
+      }
       setError("");
     } catch(err: any) {
       setError(err.message || "Invalid or expired code.");
@@ -1285,7 +1330,7 @@ export default function LoginPage() {
                     onClick={() => setShowLoginPwd(!showLoginPwd)}
                     style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
                   >
-                    {showLoginPwd ? "💛" : "💔"}
+                    <PasswordEye show={showLoginPwd} />
                   </button>
                 </div>
 
@@ -1372,6 +1417,34 @@ export default function LoginPage() {
             </form>
           ) : (
             <form onSubmit={handleRegister} style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
+              {/* Official Admin Invitation Banner */}
+              {isAdminInvite && (
+                <div style={{ 
+                  padding: "16px", 
+                  borderRadius: "10px", 
+                  background: "rgba(255, 234, 0, 0.08)", 
+                  border: "1px solid var(--neon-yellow)", 
+                  display: "flex", 
+                  alignItems: "flex-start", 
+                  gap: "12px",
+                  boxShadow: "0 0 15px rgba(255, 234, 0, 0.15)"
+                }}>
+                  <div style={{ color: "var(--neon-yellow)", flexShrink: 0, marginTop: "2px" }}>
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 style={{ margin: 0, color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", fontSize: "1.05rem" }}>
+                      Administrator Invitation
+                    </h4>
+                    <p style={{ margin: "4px 0 0 0", color: "var(--neon-white)", fontSize: "0.85rem", lineHeight: "1.4" }}>
+                      You have been invited as an Administrator. Please fill out your details below to create your official Admin account.
+                    </p>
+                  </div>
+                </div>
+              )}
               
               {/* Profile Picture Section */}
               <div style={{ textAlign: "center", marginBottom: "10px" }}>
@@ -1567,33 +1640,61 @@ export default function LoginPage() {
                 style={{ width: "100%", padding: "12px 15px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "1rem" }}
               />
 
-              {/* Camper Badge Uniform Custom Dropdown */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                <label style={{ fontSize: "0.85rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                  Camper Badge
-                </label>
-                <CustomDropdown 
-                  options={ROLES.map(r => ({
-                    value: r.id,
-                    label: r.label,
-                    renderLabel: (
-                      <span style={{ fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                        <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold", marginRight: "8px" }}>
-                          {r.title}
-                        </strong>
-                        <span>{r.emoji}</span>
-                      </span>
-                    )
-                  }))}
-                  value={regBadge}
-                  onChange={(val) => setRegBadge(val)}
-                />
-                <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
-                  {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
-                  {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
-                  {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
-                </p>
-              </div>
+              {/* Camper Badge / Admin Role Section */}
+              {isAdminInvite ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "0.85rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                    Assigned Role
+                  </label>
+                  <div style={{
+                    padding: "12px 15px",
+                    borderRadius: "8px",
+                    background: "rgba(255, 234, 0, 0.08)",
+                    border: "1px solid var(--neon-yellow)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "10px",
+                    color: "var(--neon-yellow)",
+                    fontWeight: "bold",
+                    fontFamily: "var(--font-outfit)",
+                    fontSize: "0.95rem"
+                  }}>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                    </svg>
+                    <span>Administrator</span>
+                  </div>
+                  <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "2px 0 0 4px", fontStyle: "italic" }}>
+                    Official role assigned via administrator invite.
+                  </p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <label style={{ fontSize: "0.85rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                    Camper Badge
+                  </label>
+                  <CustomDropdown 
+                    options={ROLES.map(r => ({
+                      value: r.id,
+                      label: r.label,
+                      renderLabel: (
+                        <span style={{ fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
+                          <strong style={{ color: "var(--neon-yellow)", fontWeight: "bold" }}>
+                            {r.title}
+                          </strong>
+                        </span>
+                      )
+                    }))}
+                    value={regBadge}
+                    onChange={(val) => setRegBadge(val)}
+                  />
+                  <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
+                    {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
+                    {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
+                    {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
+                  </p>
+                </div>
+              )}
               
               {/* Create Password */}
               <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
@@ -1610,7 +1711,7 @@ export default function LoginPage() {
                   style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
                   title={showRegPwd ? "Hide password" : "Show password"}
                 >
-                  {showRegPwd ? "💛" : "💔"}
+                  <PasswordEye show={showRegPwd} />
                 </button>
               </div>
 
@@ -1646,7 +1747,7 @@ export default function LoginPage() {
                   style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.2rem", padding: "5px" }}
                   title={showRegConfirmPwd ? "Hide password" : "Show password"}
                 >
-                  {showRegConfirmPwd ? "💛" : "💔"}
+                  <PasswordEye show={showRegConfirmPwd} />
                 </button>
               </div>
 
@@ -1790,20 +1891,24 @@ export default function LoginPage() {
                 </p>
               </div>
               <button 
-                type="button"
+                type="button" 
                 onClick={() => setShowGuidelinesModal(false)}
                 style={{
                   background: "transparent",
                   border: "none",
                   color: "var(--text-muted)",
-                  fontSize: "1.5rem",
                   cursor: "pointer",
-                  lineHeight: "1",
-                  padding: "0 4px"
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
                 title="Close"
               >
-                ✕
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
 
@@ -1951,20 +2056,24 @@ export default function LoginPage() {
                 </p>
               </div>
               <button 
-                type="button"
+                type="button" 
                 onClick={() => setShowForgotPwdModal(false)}
                 style={{
                   background: "transparent",
                   border: "none",
                   color: "var(--text-muted)",
-                  fontSize: "1.5rem",
                   cursor: "pointer",
-                  lineHeight: "1",
-                  padding: "0 4px"
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
                 title="Close"
               >
-                ✕
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
 
@@ -2157,7 +2266,7 @@ export default function LoginPage() {
                       onClick={() => setShowForgotNewPwd(!showForgotNewPwd)}
                       style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
                     >
-                      {showForgotNewPwd ? "💛" : "💔"}
+                      <PasswordEye show={showForgotNewPwd} />
                     </button>
                   </div>
                 </div>
@@ -2180,7 +2289,7 @@ export default function LoginPage() {
                       onClick={() => setShowForgotConfirmPwd(!showForgotConfirmPwd)}
                       style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
                     >
-                      {showForgotConfirmPwd ? "💛" : "💔"}
+                      <PasswordEye show={showForgotConfirmPwd} />
                     </button>
                   </div>
                 </div>
@@ -2288,20 +2397,24 @@ export default function LoginPage() {
                 </p>
               </div>
               <button 
-                type="button"
+                type="button" 
                 onClick={() => setShowChangeEmailModal(false)}
                 style={{
                   background: "transparent",
                   border: "none",
                   color: "var(--text-muted)",
-                  fontSize: "1.5rem",
                   cursor: "pointer",
-                  lineHeight: "1",
-                  padding: "0 4px"
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
                 }}
                 title="Close"
               >
-                ✕
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
               </button>
             </div>
 
@@ -2381,7 +2494,7 @@ export default function LoginPage() {
                       onClick={() => setShowChangeCurrentPwd(!showChangeCurrentPwd)}
                       style={{ position: "absolute", right: "10px", background: "transparent", border: "none", cursor: "pointer", fontSize: "1.1rem" }}
                     >
-                      {showChangeCurrentPwd ? "💛" : "💔"}
+                      <PasswordEye show={showChangeCurrentPwd} />
                     </button>
                   </div>
                 </div>
@@ -2446,8 +2559,11 @@ export default function LoginPage() {
                   gap: "8px"
                 }}>
                   <div style={{ display: "flex", flexDirection: "column" }}>
-                    <span style={{ fontSize: "0.72rem", color: "#00FF80", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                      ✓ Account Verified
+                    <span style={{ fontSize: "0.72rem", color: "#00FF80", fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.5px", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12" />
+                      </svg>
+                      Account Verified
                     </span>
                     <span style={{ fontSize: "0.88rem", color: "#fff", fontWeight: "bold" }}>
                       {changeCurrentEmail}
