@@ -64,6 +64,7 @@ export default function ProfilePage() {
   const [regBadge, setRegBadge] = useState(BASE_ROLES[0].id);
   const [adminAssignedBadge, setAdminAssignedBadge] = useState<string | null>(null);
   const [selectedAvatar, setSelectedAvatar] = useState("");
+  const [highlightBadge, setHighlightBadge] = useState(false);
 
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
@@ -240,6 +241,52 @@ export default function ProfilePage() {
       fetchProfile();
     }
   }, []);
+
+  const performSmoothScrollToBadge = useCallback(() => {
+    const el = document.getElementById("profile-badge-section");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      setHighlightBadge(true);
+      setTimeout(() => {
+        setHighlightBadge(false);
+      }, 3500);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const checkAndScroll = () => {
+      const params = new URLSearchParams(window.location.search);
+      const hash = window.location.hash;
+      if (params.get("scrollTo") === "badge" || hash === "#badge") {
+        setTimeout(performSmoothScrollToBadge, 350);
+        setTimeout(performSmoothScrollToBadge, 850);
+      }
+    };
+
+    checkAndScroll();
+
+    const handleBadgeUpdated = () => {
+      const activeStr = localStorage.getItem("activeUser");
+      if (activeStr) {
+        try {
+          const u = JSON.parse(activeStr);
+          setActiveUser((prev: any) => ({ ...prev, badge: u.badge }));
+          setRegBadge(u.badge);
+        } catch(e) {}
+      }
+      setTimeout(performSmoothScrollToBadge, 250);
+    };
+
+    window.addEventListener("badge_updated", handleBadgeUpdated);
+    window.addEventListener("popstate", checkAndScroll);
+
+    return () => {
+      window.removeEventListener("badge_updated", handleBadgeUpdated);
+      window.removeEventListener("popstate", checkAndScroll);
+    };
+  }, [performSmoothScrollToBadge]);
 
   useEffect(() => {
     if (typeof window !== "undefined" && isAdminProfile && activeUser) {
@@ -904,31 +951,38 @@ export default function ProfilePage() {
            <h2 style={{ margin: 0, color: "white", fontFamily: "var(--font-outfit)", textAlign: "center" }}>
              {formatCapitalizedName(activeUser.firstName)}{activeUser.middleName ? ` ${formatCapitalizedName(activeUser.middleName)}` : ""} {formatCapitalizedName(activeUser.lastName)}
            </h2>
-            {(() => {
-              const currentBadgeId = isAdminProfile ? "Admin" : (regBadge || activeUser?.badge || "first-timer");
-              const badgeDef = getBadgeDefinition(currentBadgeId);
-              return (
-                <div style={{
-                  margin: "8px 0",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "5px 14px",
-                  borderRadius: "20px",
-                  background: `${badgeDef.color}15`,
-                  border: `1px solid ${badgeDef.color}50`,
-                  color: badgeDef.color,
-                  fontFamily: "var(--font-outfit)",
-                  fontWeight: "700",
-                  fontSize: "0.95rem",
-                  letterSpacing: "0.3px",
-                  boxShadow: `0 0 12px ${badgeDef.color}25`
-                }}>
-                  <BadgeIcon badge={currentBadgeId} size={18} color={badgeDef.color} />
-                  <span style={{ color: badgeDef.color }}>{badgeDef.label}</span>
-                </div>
-              );
-            })()}
+             {(() => {
+               const currentBadgeId = isAdminProfile ? "Admin" : (regBadge || activeUser?.badge || "first-timer");
+               const badgeDef = getBadgeDefinition(currentBadgeId);
+               return (
+                 <div 
+                   id="profile-badge-section"
+                   style={{
+                     margin: "8px 0",
+                     display: "inline-flex",
+                     alignItems: "center",
+                     gap: "8px",
+                     padding: "6px 16px",
+                     borderRadius: "20px",
+                     background: `${badgeDef.color}18`,
+                     border: `1.5px solid ${badgeDef.color}${highlightBadge ? "FF" : "50"}`,
+                     color: badgeDef.color,
+                     fontFamily: "var(--font-outfit)",
+                     fontWeight: "700",
+                     fontSize: "0.95rem",
+                     letterSpacing: "0.3px",
+                     boxShadow: highlightBadge 
+                       ? `0 0 25px ${badgeDef.color}, 0 0 50px ${badgeDef.color}80` 
+                       : `0 0 12px ${badgeDef.color}25`,
+                     transform: highlightBadge ? "scale(1.15)" : "scale(1)",
+                     transition: "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)",
+                     cursor: "default"
+                 }}>
+                   <BadgeIcon badge={currentBadgeId} size={18} color={badgeDef.color} />
+                   <span style={{ color: badgeDef.color }}>{badgeDef.label}</span>
+                 </div>
+               );
+             })()}
             {activeUser.team && activeUser.team !== 'none' && (
               <p style={{ margin: 0, color: activeUser.team, textTransform: "capitalize", fontWeight: "bold" }}>Team {activeUser.team}</p>
             )}

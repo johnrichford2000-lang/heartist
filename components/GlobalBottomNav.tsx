@@ -59,33 +59,40 @@ export default function GlobalBottomNav() {
       let supabaseUnread = 0;
       let everyoneUnread = 0;
       try {
-         if (currentUserObj.id || currentUsername) {
-           const badgeClearedAt = Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0);
-           const badgeClearedIso = new Date(badgeClearedAt).toISOString();
-           const { count } = await supabase
-             .from('notifications')
-             .select('*', { count: 'exact', head: true })
-             .eq('recipient_id', currentUserObj.id || currentUsername)
-             .gt('created_at', badgeClearedIso)
-             .eq('is_read', false); // Still only count unread ones even if newer than badge clear
-           if (count !== null) supabaseUnread = count;
-           
-           // Fetch @everyone mentions to check against canvas
-           const lastSeenCanvasStamp = Number(localStorage.getItem(`lastSeenCanvas_${currentUsername}`) || 0);
-           const { data: evData } = await supabase
-             .from('notifications')
-             .select('created_at')
-             .eq('recipient_id', 'everyone')
-             .eq('type', 'mention');
-             
-           if (evData) {
-              everyoneUnread = evData.filter((n: any) => new Date(n.created_at).getTime() > lastSeenCanvasStamp).length;
-           }
-         }
-      } catch(e) {}
-      
-      setUnreadNotifs(supabaseUnread);
-      setCanvasUnreadNotifs(everyoneUnread);
+          if (currentUserObj.id || currentUsername) {
+            const badgeClearedAt = Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0);
+            const badgeClearedIso = new Date(badgeClearedAt).toISOString();
+            const targetRecipientIds = Array.from(new Set([
+              currentUserObj.id,
+              currentUsername,
+              `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim(),
+              currentUsername?.toLowerCase()
+            ])).filter(Boolean);
+
+            const { count } = await supabase
+              .from('notifications')
+              .select('*', { count: 'exact', head: true })
+              .in('recipient_id', targetRecipientIds)
+              .gt('created_at', badgeClearedIso)
+              .eq('is_read', false); // Still only count unread ones even if newer than badge clear
+            if (count !== null) supabaseUnread = count;
+            
+            // Fetch @everyone mentions to check against canvas
+            const lastSeenCanvasStamp = Number(localStorage.getItem(`lastSeenCanvas_${currentUsername}`) || 0);
+            const { data: evData } = await supabase
+              .from('notifications')
+              .select('created_at')
+              .eq('recipient_id', 'everyone')
+              .eq('type', 'mention');
+              
+            if (evData) {
+               everyoneUnread = evData.filter((n: any) => new Date(n.created_at).getTime() > lastSeenCanvasStamp).length;
+            }
+          }
+       } catch(e) {}
+       
+       setUnreadNotifs(supabaseUnread);
+       setCanvasUnreadNotifs(everyoneUnread);
     };
 
     const channelId = `nav_realtime_${Math.random().toString(36).substring(2, 9)}`;
@@ -102,14 +109,19 @@ export default function GlobalBottomNav() {
       .on('broadcast', { event: 'announcement_updated' }, () => {
         checkNotifs();
       })
+      .on('broadcast', { event: 'new_notif' }, () => {
+        checkNotifs();
+      })
       .subscribe();
 
     checkNotifs();
     window.addEventListener('storage', checkNotifs);
     window.addEventListener('announcements_updated', checkNotifs);
+    window.addEventListener('badge_updated', checkNotifs);
     return () => {
       window.removeEventListener('storage', checkNotifs);
       window.removeEventListener('announcements_updated', checkNotifs);
+      window.removeEventListener('badge_updated', checkNotifs);
       supabase.removeChannel(channel);
     };
   }, []);

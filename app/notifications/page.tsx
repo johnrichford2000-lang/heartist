@@ -40,11 +40,25 @@ export default function NotificationsPage() {
       setAccounts(accs);
 
       const fetchInbox = async () => {
-         try {
-             const { data: directData } = await supabase.from('notifications').select('*').eq('recipient_id', currentUserObj.id || currentUser).order('created_at', { ascending: false });
-             const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
-             
-             const data = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          try {
+              const targetIds = Array.from(new Set([
+                currentUserObj.id,
+                currentUser,
+                currentUserFullName,
+                currentUser?.toLowerCase(),
+                currentUserFullName?.toLowerCase()
+              ])).filter(Boolean);
+
+              const { data: directData } = await supabase.from('notifications').select('*').in('recipient_id', targetIds).order('created_at', { ascending: false });
+              const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
+              
+              const seenMsgIds = new Set<string>();
+              const rawData = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+              const data = rawData.filter((msg: any) => {
+                if (seenMsgIds.has(msg.id)) return false;
+                seenMsgIds.add(msg.id);
+                return true;
+              });
              
              if (data) {
                const adminNotifs: any[] = [];
@@ -159,6 +173,9 @@ export default function NotificationsPage() {
                    n.userId === currentUserFullName ||
                    n.userId === currentUser ||
                    n.userId === currentUserObj?.id ||
+                   n.recipient_id === currentUserObj?.id ||
+                   n.recipient_id === currentUser ||
+                   n.recipient_id === currentUserFullName ||
                    n.userId === "everyone"
                );
 
@@ -474,6 +491,10 @@ export default function NotificationsPage() {
                         localStorage.setItem("communityNotifications", JSON.stringify(updated));
                         window.dispatchEvent(new Event("storage"));
                       }
+                      if (notif.type === "badge_update" || notif.type?.includes("badge")) {
+                        router.push("/profile?scrollTo=badge");
+                        return;
+                      }
                       if (notif.type === "GET_INVOLVED" || notif.targetUrl) {
                         router.push(notif.targetUrl || "/get-involved?scrollTo=my-entries");
                         return;
@@ -761,6 +782,16 @@ export default function NotificationsPage() {
                       return;
                     }
 
+                    if (notif.type === "badge_update" || notif.type?.includes("badge")) {
+                      router.push("/profile?scrollTo=badge");
+                      return;
+                    }
+
+                    if (notif.type === "team_add" || notif.type === "team_remove") {
+                      router.push("/profile?scrollTo=team");
+                      return;
+                    }
+
                     if (notif.type === "pray") {
                       router.push("/prayer");
                     } else if (
@@ -1023,7 +1054,7 @@ export default function NotificationsPage() {
                           </span>
                         ) : notif.type === "badge_update" ? (
                           <span style={{ opacity: 0.9 }}>
-                            updated your role badge!
+                            updated your role badge{notif.postContent ? <> to <strong style={{ color: "var(--neon-yellow)" }}>{notif.postContent}</strong></> : ""}! <span style={{ fontSize: "0.8rem", color: "var(--neon-yellow)", fontStyle: "italic", marginLeft: "4px" }}>(Tap to view in profile)</span>
                           </span>
                         ) : notif.type === "team_add" ? (
                           <span style={{ opacity: 0.9 }}>

@@ -147,13 +147,18 @@ export default function NotificationListener() {
 
   return (
     <div 
+      onClick={(e) => {
+        if ((e.target as HTMLElement).closest('button')) return;
+        setBadgeToast(null);
+        window.location.href = "/profile?scrollTo=badge";
+      }}
       style={{
         position: "fixed",
         top: "22px",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 999999,
-        background: "rgba(14, 14, 18, 0.95)",
+        background: "rgba(14, 14, 18, 0.96)",
         backdropFilter: "blur(16px)",
         WebkitBackdropFilter: "blur(16px)",
         border: `2px solid ${badgeToast.badgeColor}`,
@@ -167,8 +172,12 @@ export default function NotificationListener() {
         width: "420px",
         animation: "slideDown 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
         pointerEvents: "auto",
-        fontFamily: "var(--font-outfit)"
+        fontFamily: "var(--font-outfit)",
+        cursor: "pointer",
+        transition: "transform 0.2s ease, box-shadow 0.2s ease"
       }}
+      onMouseEnter={(e) => e.currentTarget.style.transform = "translateX(-50%) scale(1.02)"}
+      onMouseLeave={(e) => e.currentTarget.style.transform = "translateX(-50%) scale(1)"}
     >
       <div 
         style={{
@@ -193,10 +202,16 @@ export default function NotificationListener() {
         <div style={{ fontSize: "0.9rem", color: "#FFFFFF", marginTop: "2px", lineHeight: "1.3" }}>
           {badgeToast.adminName} assigned you the <strong style={{ color: badgeToast.badgeColor }}>{badgeToast.badgeLabel}</strong> badge.
         </div>
+        <div style={{ fontSize: "0.75rem", color: badgeToast.badgeColor, marginTop: "4px", opacity: 0.9, fontWeight: "600" }}>
+          Tap to view in profile →
+        </div>
       </div>
 
       <button
-        onClick={() => setBadgeToast(null)}
+        onClick={(e) => {
+          e.stopPropagation();
+          setBadgeToast(null);
+        }}
         style={{
           background: "transparent",
           border: "none",

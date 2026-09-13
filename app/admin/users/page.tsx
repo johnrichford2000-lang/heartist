@@ -181,19 +181,6 @@ export default function AdminUsersPage() {
                 is_read: false,
                 post_id: "profile"
               }]);
-              
-              // Also insert with recipient_id = firstName in case user session checks by name
-              if (manageUser.firstName) {
-                await supabase.from('notifications').insert([{
-                  sender_id: "admin",
-                  sender_name: adminName,
-                  recipient_id: manageUser.firstName,
-                  type: "badge_update",
-                  message: JSON.stringify(notifItem),
-                  is_read: false,
-                  post_id: "profile"
-                }]);
-              }
             } catch (err) {
               console.error("Error inserting badge notification", err);
             }
