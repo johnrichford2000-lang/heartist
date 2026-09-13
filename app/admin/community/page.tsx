@@ -9,6 +9,7 @@ import { fetchCommunityPosts, deletePostFromSupabase, deleteCommentFromSupabase 
 import { supabase } from "@/lib/supabase";
 import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
+import BadgeIcon from "@/components/BadgeIcon";
 
 const LiveTimer = ({ expiry }: { expiry: number }) => {
   const [timeLeft, setTimeLeft] = useState("");
@@ -234,28 +235,8 @@ export default function AdminCanvasPage() {
     setExpandedPosts(prev => prev.includes(id) ? prev.filter(pId => pId !== id) : [...prev, id]);
   };
 
-    const getRoleIcon = (role: string) => {
-    switch (role?.toLowerCase()) {
-      case "first-timer":
-      case "first timer": return "🐣";
-      case "camp-veteran":
-      case "camp veteran": return "🎖️";
-      case "supporter": return "💖";
-      case "pastor": return "📖";
-      case "camp-coordinator":
-      case "camp coordinator": return "🎯";
-      case "facilitator": return "⭐";
-      case "media-team":
-      case "media team": return "📸";
-      case "music-team":
-      case "music team": return "🎵";
-      case "dance-ministry":
-      case "dance ministry": return "💃";
-      case "anonymous":
-          return "👤";
-      case "admin": return "👑";
-      default: return "";
-    }
+  const getRoleIcon = (role: string) => {
+    return <BadgeIcon badge={role} size={15} />;
   };
   
   // Modal State
@@ -2701,7 +2682,9 @@ export default function AdminCanvasPage() {
           }} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px" }}>
               <h3 style={{ margin: 0, color: "var(--neon-white)", display: "flex", alignItems: "center", gap: "8px", fontFamily: "var(--font-outfit)" }}>
-                <span style={{ fontSize: "1.2rem" }}>💬</span> Comments
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ display: "inline-block", verticalAlign: "middle" }}>
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg> Comments
               </h3>
               <button onClick={() => setAdminOpenCommentId(null)} style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: "1.2rem", transition: "color 0.2s" }} onMouseOver={(e) => e.currentTarget.style.color="white"} onMouseOut={(e) => e.currentTarget.style.color="var(--text-muted)"}>&times;</button>
             </div>
@@ -2713,27 +2696,7 @@ export default function AdminCanvasPage() {
                 }
                 const accounts = typeof window !== 'undefined' ? JSON.parse(localStorage.getItem("registeredAccounts") || "[]") : [];
                 const getRoleIcon = (role: string) => {
-                  switch (role?.toLowerCase()) {
-                    case "first-timer":
-                    case "first timer": return "🐣";
-                    case "camp-veteran":
-                    case "camp veteran": return "🎖️";
-                    case "supporter": return "💖";
-                    case "pastor": return "📖";
-                    case "camp-coordinator":
-                    case "camp coordinator": return "🎯";
-                    case "facilitator": return "⭐";
-                    case "media-team":
-                    case "media team": return "📸";
-                    case "music-team":
-                    case "music team": return "🎵";
-                    case "dance-ministry":
-                    case "dance ministry": return "💃";
-                    case "anonymous":
-          return "👤";
-                    case "admin": return "👑";
-                    default: return "";
-                  }
+                  return <BadgeIcon badge={role} size={15} />;
                 };
 
                 const renderAuthorName = (name: string, role: string = "Heartist") => {

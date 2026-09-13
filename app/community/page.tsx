@@ -20,6 +20,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUser } from "@/lib/authHelper";
 import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
+import BadgeIcon from "@/components/BadgeIcon";
 
 const LiveTimer = ({
   expiry,
@@ -946,38 +947,7 @@ export default function CanvasPage() {
   };
 
   const getRoleIcon = (role: string) => {
-    switch (role?.toLowerCase()) {
-      case "first-timer":
-      case "first timer":
-        return "🐣";
-      case "camp-veteran":
-      case "camp veteran":
-        return "🎖️";
-      case "supporter":
-        return "💖";
-      case "pastor":
-        return "📖";
-      case "camp-coordinator":
-      case "camp coordinator":
-        return "🎯";
-      case "facilitator":
-        return "⭐";
-      case "media-team":
-      case "media team":
-        return "📸";
-      case "music-team":
-      case "music team":
-        return "🎵";
-      case "dance-ministry":
-      case "dance ministry":
-        return "💃";
-      case "anonymous":
-          return "👤";
-      case "admin":
-        return "👑";
-      default:
-        return "";
-    }
+    return <BadgeIcon badge={role} size={15} />;
   };
 
   const renderAuthorName = (

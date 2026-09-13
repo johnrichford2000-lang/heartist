@@ -7,19 +7,9 @@ import HeartistLogo from "@/components/HeartistLogo";
 import AdminBottomNav from "@/components/AdminBottomNav";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+import BadgeIcon, { BadgePill, BADGE_DEFINITIONS, getBadgeDefinition } from "@/components/BadgeIcon";
 
-const ROLES = [
-  { id: "first-timer", label: "First timer" },
-  { id: "camp-veteran", label: "Camp veteran" },
-  { id: "supporter", label: "Supporter" },
-  { id: "pastor", label: "Pastor" },
-  { id: "camp-coordinator", label: "Camp coordinator" },
-  { id: "facilitator", label: "Facilitator" },
-  { id: "media-team", label: "Media team" },
-  { id: "music-team", label: "Music team" },
-  { id: "dance-ministry", label: "Dance ministry" },
-  { id: "Admin", label: "Admin" }
-];
+const ROLES = BADGE_DEFINITIONS;
 
 const TEAMS = [
   "none", "green", "red", "blue", "yellow", "brown", 
@@ -392,35 +382,34 @@ export default function AdminUsersPage() {
           )}
           
           {/* Small Badge icon on bottom right */}
-          <div style={{
-            position: "absolute",
-            bottom: "-5px",
-            right: "-5px",
-            background: "var(--bg-dark)",
-            borderRadius: "50%",
-            padding: "4px",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            border: "1px solid rgba(255,255,255,0.2)"
-          }}>
-            {user.badge === "Admin" || user.badge === "admin" ? (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--neon-yellow)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" title="Administrator">
-                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              </svg>
-            ) : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--canary-yellow)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" title={user.badge || "User"}>
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-              </svg>
-            )}
+          <div 
+            title={getBadgeDefinition(user.badge).label}
+            style={{
+              position: "absolute",
+              bottom: "-5px",
+              right: "-5px",
+              background: "rgba(10, 10, 14, 0.95)",
+              borderRadius: "50%",
+              padding: "4px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              border: `1px solid ${getBadgeDefinition(user.badge).color}80`,
+              boxShadow: `0 0 8px ${getBadgeDefinition(user.badge).color}33`
+            }}
+          >
+            <BadgeIcon badge={user.badge} size={14} color={getBadgeDefinition(user.badge).color} />
           </div>
         </div>
 
-        {/* Name */}
+        {/* Name and Badge */}
         <div>
-          <h4 style={{ margin: 0, color: user.isBanned ? "#FF4444" : "var(--neon-white)", fontSize: "1.2rem", fontFamily: "var(--font-outfit)", textTransform: "capitalize" }}>
-            {formatFullName(user.firstName, user.lastName)} {user.isBanned && "(BANNED)"}
-          </h4>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+            <h4 style={{ margin: 0, color: user.isBanned ? "#FF4444" : "var(--neon-white)", fontSize: "1.2rem", fontFamily: "var(--font-outfit)", textTransform: "capitalize" }}>
+              {formatFullName(user.firstName, user.lastName)} {user.isBanned && "(BANNED)"}
+            </h4>
+            <BadgePill badge={user.badge} size={13} />
+          </div>
           <p style={{ margin: "5px 0 0 0", color: "var(--text-muted)", fontSize: "0.85rem" }}>
             {user.email}
           </p>
@@ -804,12 +793,16 @@ export default function AdminUsersPage() {
                         background: badgeFilter === opt.id ? "rgba(255,255,255,0.05)" : "transparent",
                         fontFamily: "var(--font-outfit)",
                         fontSize: "0.9rem",
-                        borderBottom: "1px solid rgba(255,255,255,0.05)"
+                        borderBottom: "1px solid rgba(255,255,255,0.05)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "8px"
                       }}
                       onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,255,255,0.1)"}
                       onMouseOut={(e) => e.currentTarget.style.background = badgeFilter === opt.id ? "rgba(255,255,255,0.05)" : "transparent"}
                     >
-                      {opt.label}
+                      {opt.id !== "all" && <BadgeIcon badge={opt.id} size={15} />}
+                      <span>{opt.label}</span>
                     </div>
                   ))}
                 </div>
@@ -974,14 +967,18 @@ export default function AdminUsersPage() {
                 return (
                   <div key={groupKey} style={{ marginBottom: "20px" }}>
                     <h2 style={{ 
-                      color: "var(--neon-yellow)", 
+                      color: getBadgeDefinition(groupKey).color || "var(--neon-yellow)", 
                       fontFamily: "var(--font-outfit)", 
                       borderBottom: "1px solid rgba(255,255,255,0.1)", 
-                      paddingBottom: "5px",
+                      paddingBottom: "8px",
                       marginBottom: "15px",
-                      marginTop: 0
+                      marginTop: 0,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px"
                     }}>
-                      {badgeLabel}
+                      <BadgeIcon badge={groupKey} size={22} color={getBadgeDefinition(groupKey).color} />
+                      <span>{badgeLabel}</span>
                     </h2>
                     <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
                       {grouped[groupKey].map(user => renderUserCard(user))}
@@ -1040,27 +1037,114 @@ export default function AdminUsersPage() {
                 <span style={{ fontWeight: "bold", color: "white", textTransform: "capitalize" }}>{formatFullName(manageUser.firstName, manageUser.lastName)}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,0.1)", paddingBottom: "10px", position: "relative" }}>
-                <span style={{ color: "var(--text-muted)" }}>Badge:</span>
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <span style={{ color: "var(--text-muted)" }}>Badge:</span>
+                  <span style={{ fontSize: "0.72rem", color: getBadgeDefinition(editBadge).color, maxWidth: "160px", lineHeight: "1.3" }}>
+                    {getBadgeDefinition(editBadge).description}
+                  </span>
+                </div>
                 <div style={{ position: "relative" }}>
                   <div 
                     onClick={() => { setIsEditBadgeDropdownOpen(!isEditBadgeDropdownOpen); setIsEditTeamDropdownOpen(false); }}
-                    style={{ background: "rgba(0,0,0,0.5)", border: "1px solid var(--neon-yellow)", color: "var(--neon-yellow)", padding: "5px 10px", borderRadius: "8px", cursor: "pointer", display: "flex", alignItems: "center", gap: "10px" }}
+                    style={{ 
+                      background: "rgba(0,0,0,0.6)", 
+                      border: `1px solid ${getBadgeDefinition(editBadge).color}`, 
+                      color: getBadgeDefinition(editBadge).color, 
+                      padding: "6px 12px", 
+                      borderRadius: "8px", 
+                      cursor: "pointer", 
+                      display: "flex", 
+                      alignItems: "center", 
+                      gap: "8px",
+                      fontSize: "0.9rem",
+                      fontWeight: "bold",
+                      boxShadow: `0 0 10px ${getBadgeDefinition(editBadge).color}26`
+                    }}
                   >
-                    {ROLES.find(r => r.id === editBadge)?.label || "Select Badge"} <span>▼</span>
+                    <BadgeIcon badge={editBadge} size={16} color={getBadgeDefinition(editBadge).color} />
+                    <span>{getBadgeDefinition(editBadge).label}</span>
+                    <span style={{ fontSize: "0.7rem", marginLeft: "4px", transition: "transform 0.2s", transform: isEditBadgeDropdownOpen ? "rotate(180deg)" : "rotate(0deg)" }}>▼</span>
                   </div>
                   {isEditBadgeDropdownOpen && (
-                    <div style={{ position: "absolute", top: "100%", right: 0, width: "200px", background: "rgba(0,0,0,0.9)", border: "1px solid var(--neon-yellow)", borderRadius: "8px", marginTop: "5px", zIndex: 10, maxHeight: "150px", overflowY: "auto" }}>
-                      {ROLES.map(r => (
-                        <div 
-                          key={r.id} 
-                          onClick={() => { setEditBadge(r.id); setIsEditBadgeDropdownOpen(false); }}
-                          style={{ padding: "10px", color: "white", cursor: "pointer", borderBottom: "1px solid rgba(255,255,255,0.1)" }}
-                          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255,234,0,0.1)"}
-                          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
-                        >
-                          {r.label}
-                        </div>
-                      ))}
+                    <div style={{ 
+                      position: "absolute", 
+                      top: "100%", 
+                      right: 0, 
+                      width: "260px", 
+                      background: "rgba(10,10,14,0.98)", 
+                      border: "1px solid var(--neon-yellow)", 
+                      borderRadius: "10px", 
+                      marginTop: "6px", 
+                      zIndex: 30, 
+                      maxHeight: "320px", 
+                      overflowY: "auto",
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.8)"
+                    }}>
+                      {/* Section: Member Badges */}
+                      <div style={{ padding: "8px 12px 4px 12px", fontSize: "0.7rem", fontWeight: "bold", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
+                        Member Badges
+                      </div>
+                      {ROLES.filter(r => r.category === "member").map(r => {
+                        const isSelected = editBadge === r.id;
+                        return (
+                          <div 
+                            key={r.id} 
+                            onClick={() => { setEditBadge(r.id); setIsEditBadgeDropdownOpen(false); }}
+                            style={{ 
+                              padding: "10px 12px", 
+                              cursor: "pointer", 
+                              borderBottom: "1px solid rgba(255,255,255,0.05)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              background: isSelected ? "rgba(255,234,0,0.12)" : "transparent",
+                              color: isSelected ? "var(--neon-yellow)" : "white",
+                              transition: "background 0.15s"
+                            }}
+                            onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                            onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                          >
+                            <BadgeIcon badge={r.id} size={18} color={r.color} />
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "0.9rem", fontWeight: isSelected ? "bold" : "normal" }}>{r.label}</span>
+                              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: "1.2" }}>{r.description.slice(0, 48)}...</span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Section: Leadership & Ministry Badges */}
+                      <div style={{ padding: "8px 12px 4px 12px", fontSize: "0.7rem", fontWeight: "bold", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginTop: "4px" }}>
+                        Leadership & Ministry Badges
+                      </div>
+                      {ROLES.filter(r => r.category === "leadership").map(r => {
+                        const isSelected = editBadge === r.id;
+                        return (
+                          <div 
+                            key={r.id} 
+                            onClick={() => { setEditBadge(r.id); setIsEditBadgeDropdownOpen(false); }}
+                            style={{ 
+                              padding: "10px 12px", 
+                              cursor: "pointer", 
+                              borderBottom: "1px solid rgba(255,255,255,0.05)",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              background: isSelected ? "rgba(255,234,0,0.12)" : "transparent",
+                              color: isSelected ? "var(--neon-yellow)" : "white",
+                              transition: "background 0.15s"
+                            }}
+                            onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
+                            onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                          >
+                            <BadgeIcon badge={r.id} size={18} color={r.color} />
+                            <div style={{ display: "flex", flexDirection: "column" }}>
+                              <span style={{ fontSize: "0.9rem", fontWeight: isSelected ? "bold" : "normal" }}>{r.label}</span>
+                              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: "1.2" }}>{r.description.slice(0, 48)}...</span>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
