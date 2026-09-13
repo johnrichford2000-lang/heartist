@@ -329,8 +329,22 @@ export default function Home() {
         }}
       >
         <h2 style={{ fontFamily: "var(--font-outfit)", margin: "0 0 15px 0", fontSize: "clamp(1.8rem, 6vw, 2.5rem)", color: "var(--neon-white)", display: "flex", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-          <span style={{ position: "relative" }}>
-            📢 Announcements
+          <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
+            <svg 
+              width="28" 
+              height="28" 
+              viewBox="0 0 24 24" 
+              fill="none" 
+              stroke="var(--neon-yellow)" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              style={{ marginRight: "10px", filter: "drop-shadow(0 0 6px var(--neon-yellow-glow))", flexShrink: 0 }}
+            >
+              <path d="m3 11 18-5v12L3 14v-3z" />
+              <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6" />
+            </svg>
+            Announcements
             {hasUnread && (
               <span style={{ position: "absolute", top: "-5px", right: "-15px", width: "12px", height: "12px", background: "red", borderRadius: "50%", zIndex: 20 }}></span>
             )}
@@ -486,7 +500,12 @@ export default function Home() {
                               className={ann.isFusionCountdown ? "fusion-countdown-box" : ""}
                             >
                               {ann.isFeatured && (
-                                <div style={{ position: "absolute", top: "clamp(-10px, -2vw, -15px)", right: "clamp(10px, 3vw, 20px)", fontSize: "clamp(1.4rem, 4vw, 1.8rem)", zIndex: 5, textShadow: "0 2px 4px rgba(0,0,0,0.5)" }}>📌</div>
+                                <div style={{ position: "absolute", top: "clamp(-10px, -2vw, -15px)", right: "clamp(10px, 3vw, 20px)", zIndex: 5, filter: "drop-shadow(0 2px 6px rgba(255, 77, 77, 0.7))" }}>
+                                  <svg width="22" height="22" viewBox="0 0 24 24" fill="#FF4D4D" stroke="#FF4D4D" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                    <line x1="12" y1="17" x2="12" y2="22"></line>
+                                    <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"></path>
+                                  </svg>
+                                </div>
                               )}
                               <div style={{ minWidth: 0, width: "100%" }}>
                                 {ann.isRegistrationAnnouncement || ann.isPackingListAnnouncement || ann.isItineraryAnnouncement ? (
@@ -665,7 +684,25 @@ export default function Home() {
           className="ios-widget" 
           style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 255, 255, 0.05)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center" }}
         >
-          <span style={{ fontSize: "1.8rem", marginBottom: "5px" }}>🔥</span>
+          <svg 
+            width="32" 
+            height="32" 
+            viewBox="0 0 24 24" 
+            fill="rgba(255, 87, 34, 0.25)" 
+            stroke="url(#flameGradient)" 
+            strokeWidth="2" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            style={{ marginBottom: "6px", filter: "drop-shadow(0 0 8px rgba(255, 69, 0, 0.75))" }}
+          >
+            <defs>
+              <linearGradient id="flameGradient" x1="0%" y1="100%" x2="0%" y2="0%">
+                <stop offset="0%" stopColor="#FF3D00" />
+                <stop offset="100%" stopColor="#FF9100" />
+              </linearGradient>
+            </defs>
+            <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+          </svg>
           <h3 style={{ margin: 0, fontSize: "1rem", fontFamily: "var(--font-outfit)", color: "white", lineHeight: "1.2" }}>HYN<br/>Highlights</h3>
         </Link>
 
@@ -682,7 +719,39 @@ export default function Home() {
           className="ios-widget" 
           style={{ gridColumn: "span 1", gridRow: "span 1", background: "rgba(255, 234, 0, 0.1)", minHeight: "100px", display: "flex", flexDirection: "column", justifyContent: "center", alignItems: "center", textAlign: "center", border: "1px solid rgba(255,234,0,0.3)" }}
         >
-          <span style={{ fontSize: "1.8rem" }}>💛✨</span>
+          <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
+            <svg 
+              width="28" 
+              height="28" 
+              viewBox="0 0 24 24" 
+              fill="rgba(255, 234, 0, 0.25)" 
+              stroke="var(--neon-yellow)" 
+              strokeWidth="2" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              style={{ filter: "drop-shadow(0 0 8px rgba(255, 234, 0, 0.85))" }}
+            >
+              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+            </svg>
+            <svg 
+              width="14" 
+              height="14" 
+              viewBox="0 0 24 24" 
+              fill="var(--neon-yellow)" 
+              stroke="var(--neon-yellow)" 
+              strokeWidth="1.5" 
+              strokeLinecap="round" 
+              strokeLinejoin="round" 
+              style={{ 
+                position: "absolute", 
+                top: "-4px", 
+                right: "-7px", 
+                filter: "drop-shadow(0 0 6px var(--neon-yellow-glow))" 
+              }}
+            >
+              <path d="M12 2l2.4 7.6L22 12l-7.6 2.4L12 22l-2.4-7.6L2 12l7.6-2.4z" />
+            </svg>
+          </div>
           <h3 style={{ margin: "5px 0 0 0", fontSize: "1.3rem", fontFamily: "var(--font-outfit)", color: "var(--sunflower-yellow)" }}>12</h3>
           <p style={{ margin: 0, fontSize: "0.7rem", color: "var(--canary-yellow)", textTransform: "uppercase" }}>Answered</p>
         </Link>
