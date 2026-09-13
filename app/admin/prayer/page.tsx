@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
 import { fetchPrayers, PrayerData } from "@/lib/prayerSync";
-import BadgeIcon, { BadgePill } from "@/components/BadgeIcon";
+import BadgeIcon from "@/components/BadgeIcon";
 
 export default function AdminPrayerPage() {
   const [prayers, setPrayers] = useState<any[]>([]);
@@ -397,7 +397,6 @@ export default function AdminPrayerPage() {
                           <span style={{ color: "var(--neon-yellow)" }}>
                             {prayer.is_private ? "Anonymous Heartist" : realName}
                           </span>
-                          <BadgePill badge={postRole} size={12} />
                         </h3>
                         
                         {/* Hidden Real Name revealed */}

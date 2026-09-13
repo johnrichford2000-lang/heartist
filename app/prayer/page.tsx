@@ -8,7 +8,7 @@ import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
 import { supabase } from "@/lib/supabase";
 import { fetchPrayers, submitPrayerToSupabase, togglePrayerLike, togglePrayerHeart, markPrayerAsAnswered, PrayerData } from "@/lib/prayerSync";
-import BadgeIcon, { BadgePill } from "@/components/BadgeIcon";
+import BadgeIcon from "@/components/BadgeIcon";
 
 export default function PrayerRoomPage() {
   const CATEGORIES = [
@@ -833,13 +833,6 @@ return (
                     <div style={{ display: "flex", flexDirection: "column", gap: "2px", flex: 1, textAlign: "left" }}>
                       <h3 style={{ fontSize: "1.1rem", fontFamily: "var(--font-outfit)", color: "var(--neon-white)", margin: 0, display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", justifyContent: "flex-start" }}>
                         <span style={{ color: "var(--neon-yellow)" }}>{prayer.is_private ? "Anonymous Heartist" : formatCapitalizedName(prayer.author_name)}</span>
-                        {(() => {
-                          const accounts = allProfiles;
-                          const postAcc = accounts.find((a: any) => `${a.firstName} ${a.lastName || ''}`.trim() === prayer.author_name || a.firstName === prayer.author_name || a.firstName === prayer.author_id);
-                          const isAnon = prayer.is_private || (prayer.author_name && prayer.author_name.toLowerCase().includes('anonymous'));
-                          const postRole = isAnon ? 'anonymous' : (postAcc?.badge || "first-timer");
-                          return <BadgePill badge={postRole} size={12} />;
-                        })()}
                         {isOwner && <span style={{ color: "var(--neon-white)", fontSize: "0.9rem", fontWeight: "normal" }}>(you)</span>}
                       </h3>
                       <div style={{ fontSize: "0.85rem", color: "var(--text-muted)", textAlign: "left", display: "flex", justifyContent: "flex-start", gap: "6px" }}>
