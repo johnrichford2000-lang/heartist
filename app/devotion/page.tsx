@@ -553,7 +553,8 @@ function extractSavedReflection(text: string): { reflectionQuote: string | null;
 function parseEntryToInputs(text: string, methodValue: string): Record<string, string> {
   const methodDef = DEVOTION_METHODS.find(m => m.value === methodValue) || DEVOTION_METHODS[0];
   if (methodDef.value === "default" || methodDef.fields.length <= 1) {
-    return { reflection: text };
+    const cleanReflection = text === "(Photo Reflection)" ? "" : text;
+    return { reflection: cleanReflection };
   }
 
   const inputs: Record<string, string> = {};
@@ -728,6 +729,66 @@ export default function DevotionPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Picture Reflection states and handler
+  const [reflectionFormat, setReflectionFormat] = useState<"text" | "picture">("text");
+  const [reflectionImage, setReflectionImage] = useState<string | null>(null);
+  const [isProcessingImage, setIsProcessingImage] = useState<boolean>(false);
+
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select a valid image file.");
+      return;
+    }
+
+    setIsProcessingImage(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const MAX_DIM = 1200;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIM) {
+            height = Math.round((height * MAX_DIM) / width);
+            width = MAX_DIM;
+          }
+        } else {
+          if (height > MAX_DIM) {
+            width = Math.round((width * MAX_DIM) / height);
+            height = MAX_DIM;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL("image/jpeg", 0.82);
+          setReflectionImage(compressed);
+        } else {
+          setReflectionImage(event.target?.result as string);
+        }
+        setIsProcessingImage(false);
+      };
+      img.onerror = () => {
+        setIsProcessingImage(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setIsProcessingImage(false);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   // Custom branded confirmation modal state
   const [deletingEntry, setDeletingEntry] = useState<DevotionEntry | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -887,13 +948,13 @@ export default function DevotionPage() {
     }
   };
 
-  const hasContent = checkHasUserContent(selectedMethod, methodInputs, dailyDevotion);
+  const hasContent = checkHasUserContent(selectedMethod, methodInputs, dailyDevotion) || Boolean(reflectionImage);
 
   const handleSave = async () => {
     if (!hasContent || !currentUser || isSaving) return;
 
     const combinedText = buildCombinedText(selectedMethod, methodInputs, reflectionQuoteInput);
-    if (!combinedText.trim()) return;
+    if (!combinedText.trim() && !reflectionImage) return;
 
     setIsSaving(true);
     const targetDate = editingDate || currentDate;
@@ -905,7 +966,8 @@ export default function DevotionPage() {
       combinedText, 
       titleToSave, 
       selectedMethod,
-      editingEntryId
+      editingEntryId,
+      reflectionImage
     );
     if (ok) {
       const updated = await fetchUserDevotions(currentUser.id);
@@ -922,6 +984,8 @@ export default function DevotionPage() {
       setEditingDate(null);
       setEditingEntryId(null);
       setReflectionQuoteInput(dailyDevotion.reflection);
+      setReflectionImage(null);
+      setReflectionFormat("text");
       setTimeout(() => setIsSaved(false), 2500);
     }
     setIsSaving(false);
@@ -933,6 +997,14 @@ export default function DevotionPage() {
     setEditingDate(entry.date);
     setJournalTitle(entry.title !== entry.date ? entry.title : "");
     setSelectedMethod(m);
+
+    if (entry.image) {
+      setReflectionImage(entry.image);
+      setReflectionFormat("picture");
+    } else {
+      setReflectionImage(null);
+      setReflectionFormat("text");
+    }
 
     const { reflectionQuote, cleanText } = extractSavedReflection(entry.text);
     setReflectionQuoteInput(reflectionQuote !== null ? reflectionQuote : dailyDevotion.reflection);
@@ -948,6 +1020,8 @@ export default function DevotionPage() {
     setMethodInputs({});
     setSelectedMethod("default");
     setReflectionQuoteInput(dailyDevotion.reflection);
+    setReflectionImage(null);
+    setReflectionFormat("text");
   };
 
   const confirmDelete = async () => {
@@ -1056,6 +1130,9 @@ export default function DevotionPage() {
         <h2 style={{ color: "var(--neon-white)", fontSize: "1.1rem", marginTop: "10px", fontFamily: "var(--font-outfit)", fontStyle: "italic" }}>
           Spend time with God and write your reflections.
         </h2>
+        <p style={{ color: "rgba(255, 255, 255, 0.72)", fontSize: "0.85rem", marginTop: "6px", marginBottom: "0", fontFamily: "var(--font-outfit)" }}>
+          🔒 Don&apos;t worry, admins can&apos;t see your personal time with God. Your devotions and reflections are completely private.
+        </p>
         {currentUser && (
           <div style={{ display: "inline-flex", alignItems: "center", gap: "8px", marginTop: "10px", padding: "6px 14px", background: "rgba(255,255,255,0.05)", borderRadius: "20px", border: "1px solid rgba(255,255,255,0.1)" }}>
             <span style={{ fontSize: "0.8rem", color: "#00FF80", fontWeight: "bold" }}>Realtime Live</span>
@@ -1481,20 +1558,265 @@ export default function DevotionPage() {
               </div>
 
               {activeMethodObj.value === "default" ? (
-                <textarea
-                  id="devotion-input-reflection"
-                  className="seamless-devotion-input"
-                  placeholder="(What is God speaking into your heart today? Write freely...)"
-                  value={methodInputs["reflection"] || ""}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setMethodInputs(prev => ({ ...prev, reflection: val }));
-                    e.target.style.height = "auto";
-                    e.target.style.height = Math.max(180, e.target.scrollHeight) + "px";
-                  }}
-                  rows={8}
-                  style={{ minHeight: "180px" }}
-                />
+                <div>
+                  {/* Format Selector: Text vs Picture */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.82rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+                      Format:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setReflectionFormat("text")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontSize: "0.82rem",
+                        fontFamily: "var(--font-outfit)",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        border: reflectionFormat === "text" ? "1px solid var(--neon-yellow)" : "1px solid rgba(255, 255, 255, 0.15)",
+                        background: reflectionFormat === "text" ? "rgba(255, 234, 0, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                        color: reflectionFormat === "text" ? "var(--neon-yellow)" : "var(--text-muted)",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      ✍️ Text
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReflectionFormat("picture")}
+                      style={{
+                        padding: "6px 14px",
+                        borderRadius: "20px",
+                        fontSize: "0.82rem",
+                        fontFamily: "var(--font-outfit)",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        border: reflectionFormat === "picture" ? "1px solid var(--neon-yellow)" : "1px solid rgba(255, 255, 255, 0.15)",
+                        background: reflectionFormat === "picture" ? "rgba(255, 234, 0, 0.15)" : "rgba(255, 255, 255, 0.05)",
+                        color: reflectionFormat === "picture" ? "var(--neon-yellow)" : "var(--text-muted)",
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      📷 Pictures {reflectionImage ? "• Attached" : ""}
+                    </button>
+                  </div>
+
+                  {/* Hidden file & camera inputs */}
+                  <input
+                    id="devotion-file-upload"
+                    type="file"
+                    accept="image/*"
+                    style={{ display: "none" }}
+                    onChange={handleImageFileChange}
+                  />
+                  <input
+                    id="devotion-camera-capture"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    style={{ display: "none" }}
+                    onChange={handleImageFileChange}
+                  />
+
+                  {reflectionFormat === "text" ? (
+                    <textarea
+                      id="devotion-input-reflection"
+                      className="seamless-devotion-input"
+                      placeholder="(What is God speaking into your heart today? Write freely...)"
+                      value={methodInputs["reflection"] || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMethodInputs(prev => ({ ...prev, reflection: val }));
+                        e.target.style.height = "auto";
+                        e.target.style.height = Math.max(180, e.target.scrollHeight) + "px";
+                      }}
+                      rows={8}
+                      style={{ minHeight: "180px" }}
+                    />
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                      {!reflectionImage ? (
+                        <div
+                          style={{
+                            padding: "24px 16px",
+                            borderRadius: "12px",
+                            border: "1px dashed rgba(255, 234, 0, 0.3)",
+                            background: "rgba(255, 234, 0, 0.03)",
+                            textAlign: "center",
+                            display: "flex",
+                            flexDirection: "column",
+                            alignItems: "center",
+                            gap: "14px"
+                          }}
+                        >
+                          <div style={{ fontSize: "2.2rem" }}>📸</div>
+                          <div>
+                            <div style={{ color: "var(--neon-white)", fontWeight: "bold", fontSize: "0.95rem", fontFamily: "var(--font-outfit)" }}>
+                              Add a Photo Reflection
+                            </div>
+                            <div style={{ color: "var(--text-muted)", fontSize: "0.82rem", marginTop: "4px" }}>
+                              Capture or upload your handwritten journal, Bible notes, artwork, or inspirational photo.
+                            </div>
+                          </div>
+
+                          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", justifyContent: "center" }}>
+                            <button
+                              type="button"
+                              disabled={isProcessingImage}
+                              onClick={() => document.getElementById("devotion-file-upload")?.click()}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "10px 18px",
+                                borderRadius: "8px",
+                                border: "1px solid var(--neon-yellow)",
+                                background: "rgba(255, 234, 0, 0.1)",
+                                color: "var(--neon-yellow)",
+                                fontWeight: "bold",
+                                fontSize: "0.88rem",
+                                cursor: isProcessingImage ? "not-allowed" : "pointer",
+                                transition: "all 0.2s ease"
+                              }}
+                              onMouseOver={(e) => (e.currentTarget.style.background = "rgba(255, 234, 0, 0.2)")}
+                              onMouseOut={(e) => (e.currentTarget.style.background = "rgba(255, 234, 0, 0.1)")}
+                            >
+                              📁 Upload Picture
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={isProcessingImage}
+                              onClick={() => document.getElementById("devotion-camera-capture")?.click()}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "8px",
+                                padding: "10px 18px",
+                                borderRadius: "8px",
+                                border: "1px solid #00FF80",
+                                background: "rgba(0, 255, 128, 0.1)",
+                                color: "#00FF80",
+                                fontWeight: "bold",
+                                fontSize: "0.88rem",
+                                cursor: isProcessingImage ? "not-allowed" : "pointer",
+                                transition: "all 0.2s ease"
+                              }}
+                              onMouseOver={(e) => (e.currentTarget.style.background = "rgba(0, 255, 128, 0.2)")}
+                              onMouseOut={(e) => (e.currentTarget.style.background = "rgba(0, 255, 128, 0.1)")}
+                            >
+                              📷 Take a Picture
+                            </button>
+                          </div>
+
+                          {isProcessingImage && (
+                            <div style={{ color: "var(--neon-yellow)", fontSize: "0.85rem", fontStyle: "italic" }}>
+                              ⏳ Processing and optimizing image...
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                          {/* Photo Preview */}
+                          <div
+                            style={{
+                              borderRadius: "12px",
+                              overflow: "hidden",
+                              border: "1px solid rgba(255, 234, 0, 0.35)",
+                              background: "rgba(0, 0, 0, 0.5)",
+                              boxShadow: "0 6px 20px rgba(0, 0, 0, 0.4)",
+                              display: "flex",
+                              justifyContent: "center",
+                              alignItems: "center",
+                              padding: "10px"
+                            }}
+                          >
+                            <img
+                              src={reflectionImage}
+                              alt="Devotion Reflection"
+                              style={{
+                                maxWidth: "100%",
+                                maxHeight: "400px",
+                                borderRadius: "8px",
+                                objectFit: "contain",
+                                display: "block"
+                              }}
+                            />
+                          </div>
+
+                          {/* Photo Actions */}
+                          <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById("devotion-file-upload")?.click()}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: "1px solid rgba(255, 234, 0, 0.4)",
+                                  background: "rgba(255, 234, 0, 0.1)",
+                                  color: "var(--neon-yellow)",
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer"
+                                }}
+                              >
+                                📁 Change Picture
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => document.getElementById("devotion-camera-capture")?.click()}
+                                style={{
+                                  padding: "6px 12px",
+                                  borderRadius: "6px",
+                                  border: "1px solid rgba(0, 255, 128, 0.4)",
+                                  background: "rgba(0, 255, 128, 0.1)",
+                                  color: "#00FF80",
+                                  fontSize: "0.8rem",
+                                  cursor: "pointer"
+                                }}
+                              >
+                                📷 Retake
+                              </button>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => setReflectionImage(null)}
+                              style={{
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                border: "1px solid rgba(255, 77, 77, 0.4)",
+                                background: "rgba(255, 77, 77, 0.1)",
+                                color: "#ff6666",
+                                fontSize: "0.8rem",
+                                cursor: "pointer"
+                              }}
+                            >
+                              🗑️ Remove Picture
+                            </button>
+                          </div>
+
+                          {/* Accompanying note / reflection input */}
+                          <textarea
+                            id="devotion-input-reflection"
+                            className="seamless-devotion-input"
+                            placeholder="(Optional: Write notes, insights, or a prayer about this photo...)"
+                            value={methodInputs["reflection"] || ""}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setMethodInputs(prev => ({ ...prev, reflection: val }));
+                              e.target.style.height = "auto";
+                              e.target.style.height = Math.max(90, e.target.scrollHeight) + "px";
+                            }}
+                            rows={3}
+                            style={{ minHeight: "90px", marginTop: "6px" }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ) : (
                 activeMethodObj.fields.map((field, idx) => {
                   const isFilled = Boolean(methodInputs[field.key]?.trim());
@@ -1721,6 +2043,20 @@ export default function DevotionPage() {
                         }}>
                           {methodBadge}
                         </span>
+                        {entry.image && (
+                          <span style={{
+                            fontSize: "0.75rem",
+                            color: "#00FF80",
+                            background: "rgba(0, 255, 128, 0.12)",
+                            padding: "2px 8px",
+                            borderRadius: "8px",
+                            border: "1px solid rgba(0, 255, 128, 0.3)",
+                            fontWeight: "bold",
+                            fontFamily: "var(--font-outfit)"
+                          }}>
+                            📷 Photo
+                          </span>
+                        )}
                       </div>
 
                       {/* Right side: Action Buttons (only visible when expanded) & Expand Arrow */}
@@ -1788,7 +2124,27 @@ export default function DevotionPage() {
                         paddingTop: "14px", 
                         borderTop: "1px solid rgba(255, 255, 255, 0.1)" 
                       }}>
-                        {renderFormattedDevotionText(entry.text)}
+                        {entry.image && (
+                          <div style={{ marginBottom: entry.text && entry.text !== "(Photo Reflection)" ? "14px" : "0" }}>
+                            <img 
+                              src={entry.image} 
+                              alt="Devotion Reflection" 
+                              style={{
+                                maxWidth: "100%",
+                                maxHeight: "450px",
+                                borderRadius: "10px",
+                                border: "1px solid rgba(255, 234, 0, 0.3)",
+                                boxShadow: "0 4px 16px rgba(0,0,0,0.5)",
+                                display: "block",
+                                objectFit: "contain",
+                                background: "rgba(0,0,0,0.4)"
+                              }}
+                            />
+                          </div>
+                        )}
+                        {entry.text && entry.text !== "(Photo Reflection)" && (
+                          renderFormattedDevotionText(entry.text)
+                        )}
                       </div>
                     )}
                   </div>

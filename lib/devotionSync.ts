@@ -7,6 +7,7 @@ export interface DevotionEntry {
   text: string;
   method?: string;
   timestamp?: number;
+  image?: string;
 }
 
 const MONTH_NAMES = [
@@ -60,7 +61,8 @@ export async function fetchUserDevotions(userId: string): Promise<DevotionEntry[
         date: formatDevotionDate(item.date),
         text: item.text || "",
         method: item.method || "default",
-        timestamp: item.timestamp || (item.date ? new Date(item.date).getTime() : Date.now())
+        timestamp: item.timestamp || (item.date ? new Date(item.date).getTime() : Date.now()),
+        image: item.image || undefined
       }));
     }
 
@@ -80,7 +82,8 @@ export async function fetchUserDevotions(userId: string): Promise<DevotionEntry[
         date: formatDevotionDate(f.data?.date || f.created_at),
         text: f.data?.text || "",
         method: f.data?.method || "default",
-        timestamp: new Date(f.created_at).getTime()
+        timestamp: new Date(f.created_at).getTime(),
+        image: f.data?.image || undefined
       }));
 
       // Initialize system_settings entry with the migrated records
@@ -111,9 +114,10 @@ export async function saveUserDevotion(
   text: string, 
   title?: string,
   method: string = "default",
-  entryId?: string | null
+  entryId?: string | null,
+  image?: string | null
 ): Promise<boolean> {
-  if (!userId || !text.trim()) return false;
+  if (!userId || (!text.trim() && !image)) return false;
 
   const formattedDate = formatDevotionDate(date);
   const finalTitle = title?.trim() ? title.trim() : formattedDate;
@@ -132,13 +136,14 @@ export async function saveUserDevotion(
           ...updatedList[index],
           title: finalTitle,
           date: formattedDate,
-          text,
+          text: text || (image ? "(Photo Reflection)" : ""),
           method,
-          timestamp: now
+          timestamp: now,
+          image: image !== undefined ? (image || undefined) : updatedList[index].image
         };
       } else {
         updatedList = [
-          { id: entryId, title: finalTitle, date: formattedDate, text, method, timestamp: now },
+          { id: entryId, title: finalTitle, date: formattedDate, text: text || (image ? "(Photo Reflection)" : ""), method, timestamp: now, image: image || undefined },
           ...currentList
         ];
       }
@@ -150,18 +155,20 @@ export async function saveUserDevotion(
         updatedList[existingDateIndex] = {
           ...updatedList[existingDateIndex],
           title: finalTitle,
-          text,
+          text: text || (image ? "(Photo Reflection)" : ""),
           method,
-          timestamp: now
+          timestamp: now,
+          image: image !== undefined ? (image || undefined) : updatedList[existingDateIndex].image
         };
       } else {
         const newEntry: DevotionEntry = {
           id: `dev-${now}-${Math.random().toString(36).substring(2, 7)}`,
           title: finalTitle,
           date: formattedDate,
-          text,
+          text: text || (image ? "(Photo Reflection)" : ""),
           method,
-          timestamp: now
+          timestamp: now,
+          image: image || undefined
         };
         updatedList = [newEntry, ...currentList];
       }
