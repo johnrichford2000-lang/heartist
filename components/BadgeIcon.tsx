@@ -17,7 +17,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     label: "First Timer",
     category: "member",
     description: "For participants who are attending the camp for the first time.",
-    color: "#FFEA00"
+    color: "#22C55E"
   },
   {
     id: "camp-veteran",
@@ -89,7 +89,7 @@ export const BADGE_DEFINITIONS: BadgeDefinition[] = [
     label: "Admin",
     category: "leadership",
     description: "For official page and community administrators.",
-    color: "#FFEA00"
+    color: "#FFFFFF"
   }
 ];
 
@@ -135,11 +135,10 @@ export default function BadgeIcon({ badge, size = 16, color, className, style }:
     case "first-timer":
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{ display: "inline-block", verticalAlign: "middle", ...style }}>
-          <path d="M12 2C8.5 2 6 5 6 9c0 1.5.5 3 1.5 4.5l2-1.5 2.5 2.5 2-2 2.5 2 1.5-1.5C19 11 19.5 9.5 19.5 9c0-4-3.5-7-7.5-7z" fill={strokeColor + "1a"} />
-          <path d="M4 14c0 4.5 3.5 8 8 8s8-3.5 8-8l-3 1.5-2.5-2.5L12 15l-2.5-2L7 15.5 4 14z" fill={strokeColor + "33"} />
-          <circle cx="10" cy="8" r="1" fill={strokeColor} />
-          <circle cx="14" cy="8" r="1" fill={strokeColor} />
-          <polygon points="11,9.5 13,9.5 12,10.5" fill={strokeColor} strokeWidth="0" />
+          <path d="M12 22v-9" />
+          <path d="M12 13a5 5 0 0 0-5-5c-3 0-4 3-4 6 3 0 6-1 9-1z" fill={strokeColor + "26"} />
+          <path d="M12 11a5 5 0 0 1 5-5c3 0 4 3 4 6-3 0-6-1-9-1z" fill={strokeColor + "40"} />
+          <path d="M7 22h10" />
         </svg>
       );
 
@@ -229,22 +228,28 @@ export default function BadgeIcon({ badge, size = 16, color, className, style }:
     case "dance-ministry":
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{ display: "inline-block", verticalAlign: "middle", ...style }}>
-          <circle cx="12" cy="3.5" r="2" fill={strokeColor} />
-          <path d="M6 8c2-2 4-3 6-3s4 1 6 3" />
-          <path d="M12 5.5v5l-3 4-2 7.5m5-11.5l3 4 2 7.5" />
-          <path d="M4 14c4-2 8 2 12-1s4 2 4 4" strokeDasharray="3 2" />
+          <circle cx="12" cy="10" r="7" fill={strokeColor + "1a"} />
+          <circle cx="12" cy="10" r="4.5" strokeWidth="1.5" />
+          <line x1="12" y1="2" x2="12" y2="4" strokeWidth="2" />
+          <line x1="19" y1="10" x2="21" y2="10" strokeWidth="2" />
+          <line x1="3" y1="10" x2="5" y2="10" strokeWidth="2" />
+          <line x1="7" y1="5" x2="6" y2="3.5" strokeWidth="2" />
+          <line x1="17" y1="5" x2="18" y2="3.5" strokeWidth="2" />
+          <path d="M9 16c-1 3-3 4-2 6" strokeWidth="1.5" />
+          <path d="M12 17c0 2.5 2 3.5 1 5" strokeWidth="1.5" />
+          <path d="M15 16c1 3 3 4 2 6" strokeWidth="1.5" />
         </svg>
       );
 
     case "admin":
       return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={strokeColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} style={{ display: "inline-block", verticalAlign: "middle", ...style }}>
-          <path d="M2 19h20v2H2z" fill={strokeColor} />
-          <path d="M3 16l3-10 6 5 6-5 3 10H3z" fill={strokeColor + "33"} />
-          <circle cx="3" cy="6" r="1.5" fill={strokeColor} strokeWidth="0" />
-          <circle cx="12" cy="3.5" r="1.5" fill={strokeColor} strokeWidth="0" />
-          <circle cx="21" cy="6" r="1.5" fill={strokeColor} strokeWidth="0" />
-          <polygon points="12 11 13.5 13.5 12 16 10.5 13.5" fill={strokeColor} strokeWidth="0" />
+          <rect x="3" y="16" width="18" height="3.5" rx="1.5" fill={strokeColor} />
+          <path d="M3 16L2 7l5.5 4.5L12 3.5l4.5 8L22 7l-1 9H3z" fill={strokeColor + "33"} strokeWidth="2.2" />
+          <circle cx="2" cy="7" r="2" fill={strokeColor} strokeWidth="0" />
+          <circle cx="12" cy="3.5" r="2.2" fill={strokeColor} strokeWidth="0" />
+          <circle cx="22" cy="7" r="2" fill={strokeColor} strokeWidth="0" />
+          <polygon points="12 9.5 14.5 12.5 12 15 9.5 12.5" fill={strokeColor} strokeWidth="0" />
         </svg>
       );
 
