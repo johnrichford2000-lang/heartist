@@ -134,6 +134,57 @@ export default function FusionCampPage() {
   return (
     <>
       <main className="app-container fusion-home-container" style={{ paddingBottom: "120px" }}>
+        {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Dashboard) */}
+        <Link
+          href="/"
+          aria-label="Back to Dashboard"
+          style={{
+            position: "fixed",
+            top: "18px",
+            left: "18px",
+            zIndex: 9999,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "44px",
+            height: "44px",
+            borderRadius: "12px",
+            background: "rgba(10, 10, 10, 0.75)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            border: "1px solid var(--neon-yellow)",
+            color: "var(--neon-yellow)",
+            textDecoration: "none",
+            boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+            transition: "all 0.25s ease",
+            cursor: "pointer"
+          }}
+          onMouseOver={(e) => {
+            e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+            e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+            e.currentTarget.style.transform = "translateX(-3px)";
+          }}
+          onMouseOut={(e) => {
+            e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+            e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+            e.currentTarget.style.transform = "translateX(0)";
+          }}
+        >
+          <svg 
+            width="22" 
+            height="22" 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round"
+          >
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </Link>
+
         {/* Top Logo Section */}
         <header className="top-header">
           <div className="header-title-container">
@@ -163,40 +214,64 @@ export default function FusionCampPage() {
                 <div style={{ width: "150px" }}>
                   <CustomDropdown
                     value={themeIteration}
-                    onChange={(val) => setThemeIteration(val)}
                     options={campIterations.map((num) => ({ value: num.toString(), label: `Fusion ${num}` }))}
+                    onChange={(val) => setThemeIteration(val)}
                   />
                 </div>
               </div>
-              <div className="quote-card" style={{ border: "1px solid var(--neon-yellow)", padding: "30px 20px", textAlign: "center", alignItems: "center" }}>
-                <span className="quote-title">&apos;Fusion Camp {themeIteration} Theme&apos;</span>
-                <span className="quote-text glow-text-yellow" style={{ fontFamily: "var(--font-outfit)", fontWeight: 900, fontSize: "1.5rem" }}>{themeWord}</span>
-                <span className="quote-subtext">{themeSub}</span>
+              
+              <div className="theme-reveal-card" style={{ padding: "clamp(20px, 5vw, 30px)" }}>
+                <span className="theme-tag">THEME</span>
+                <h3 className="theme-word glow-text-yellow" style={{ fontSize: "clamp(2rem, 8vw, 3.5rem)" }}>
+                  {themeWord}
+                </h3>
+                <p className="theme-sub" style={{ fontSize: "clamp(0.9rem, 3vw, 1.05rem)" }}>
+                  {themeSub}
+                </p>
               </div>
             </div>
           </div>
         </section>
 
-        {/* The Camp Compass */}
+        {/* Camp Compass (Info Preview) */}
         <section style={{ marginBottom: "clamp(30px, 5vw, 45px)" }}>
-          <h2 className="section-title">The Camp Compass</h2>
-          <div className="card" style={{ padding: "clamp(20px, 4vw, 30px)", borderLeft: "4px solid var(--neon-yellow)", background: "linear-gradient(135deg, rgba(255,234,0,0.05) 0%, transparent 100%)" }}>
-            <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", fontSize: "0.85rem", color: "var(--neon-yellow)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "1px" }}>Select Camp Iteration</label>
-              <CustomDropdown
-                value={selectedCamp}
-                onChange={(val) => setSelectedCamp(val)}
-                options={campIterations.map((num) => ({ value: num.toString(), label: `Fusion Camp ${num}` }))}
-              />
+          <h2 className="section-title">Camp Compass</h2>
+          <div className="card" style={{ padding: "clamp(18px, 4vw, 24px)" }}>
+            <div style={{ marginBottom: "15px", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <span style={{ color: "var(--neon-white)", fontSize: "0.9rem", textTransform: "uppercase", letterSpacing: "1px" }}>Select Fusion:</span>
+                <div style={{ width: "140px" }}>
+                  <CustomDropdown
+                    value={selectedCamp}
+                    options={campIterations.map((num) => ({ value: num.toString(), label: `Fusion ${num}` }))}
+                    onChange={(val) => {
+                      setSelectedCamp(val);
+                      loadCampData(val);
+                    }}
+                  />
+                </div>
+              </div>
+              <span style={{ 
+                fontSize: "0.75rem", 
+                padding: "4px 10px", 
+                borderRadius: "12px", 
+                background: campStatus === "Open" ? "rgba(0, 255, 128, 0.15)" : campStatus === "Ended" ? "rgba(255, 68, 68, 0.15)" : campStatus === "NotAvailable" ? "rgba(255, 165, 0, 0.15)" : "rgba(255,255,255,0.05)",
+                color: campStatus === "Open" ? "#00FF80" : campStatus === "Ended" ? "#FF4444" : campStatus === "NotAvailable" ? "#FFA500" : "var(--text-muted)",
+                border: `1px solid ${campStatus === "Open" ? "rgba(0, 255, 128, 0.3)" : campStatus === "Ended" ? "rgba(255, 68, 68, 0.3)" : campStatus === "NotAvailable" ? "rgba(255, 165, 0, 0.3)" : "rgba(255,255,255,0.1)"}`,
+                textTransform: "uppercase",
+                letterSpacing: "0.5px",
+                fontWeight: "bold"
+              }}>
+                {campStatus === "Open" ? "Registration Open" : campStatus === "Ended" ? "Ended" : campStatus === "NotAvailable" ? "Not Available" : "Registration Closed"}
+              </span>
             </div>
 
-            <div style={{ background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: "8px", padding: "clamp(15px, 3vw, 20px)", marginTop: "15px", textAlign: "left" }}>
-              <div style={{ display: "flex", alignItems: "flex-start", margin: "0 0 15px 0", fontSize: "1.05rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                <strong style={{ color: "var(--sunflower-yellow)", display: "inline-block", width: "90px", flexShrink: 0 }}>Location:</strong> 
-                <span style={{ flex: 1, wordBreak: "break-word" }}>{campLocation?.name || "CLASSIFIED"}</span>
-              </div>
-              
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", borderTop: "1px solid rgba(255,255,255,0.1)", paddingTop: "15px" }}>
+            <div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+                <div style={{ display: "flex", alignItems: "flex-start", margin: 0, fontSize: "0.95rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
+                  <strong style={{ color: "var(--sunflower-yellow)", display: "inline-block", width: "90px", flexShrink: 0 }}>Location:</strong> 
+                  <span style={{ flex: 1, lineHeight: "1.4", wordBreak: "break-word" }}>{campLocation ? campLocation.name : "Location details classified."}</span>
+                </div>
                 <div style={{ display: "flex", alignItems: "flex-start", margin: 0, fontSize: "0.95rem", color: "var(--canary-yellow)", fontFamily: "var(--font-outfit)" }}>
                   <strong style={{ color: "var(--sunflower-yellow)", display: "inline-block", width: "90px", flexShrink: 0 }}>Theme:</strong> 
                   <span style={{ flex: 1, lineHeight: "1.4", wordBreak: "break-word" }}>{compassThemeWord}</span>
@@ -214,7 +289,11 @@ export default function FusionCampPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "15px", alignItems: "center", padding: "30px 0", marginTop: "15px", border: "2px dashed rgba(255,255,255,0.1)", borderRadius: "12px", background: "rgba(0,0,0,0.3)" }}>
                   <div style={{ width: "80px", height: "80px", borderRadius: "50%", border: "2px dashed var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center", animation: "spin 10s linear infinite" }}>
-                    <span style={{ fontSize: "2.5rem", animation: "spin 10s linear infinite reverse" }}>❓</span>
+                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: "spin 10s linear infinite reverse" }}>
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path>
+                      <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
                   </div>
                   <div style={{ textAlign: "center" }}>
                     <h3 style={{ margin: 0, fontSize: "1.2rem", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)", textTransform: "uppercase" }}>CLASSIFIED</h3>
@@ -236,8 +315,14 @@ export default function FusionCampPage() {
             
             {/* Featured Announcement (Blueprint Teaser) */}
             <div className="card dashboard-item" style={{ borderLeft: isRegOpen ? "4px solid var(--neon-yellow)" : "4px solid #FF4444", padding: "clamp(18px, 4vw, 24px)" }}>
-              <div className="feed-header">
-                <span className="feed-icon">📣</span>
+              <div className="feed-header" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <span className="feed-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neon-yellow)" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"></path>
+                    <path d="m3 11 18-5v12L3 13v-2z"></path>
+                    <path d="M11.6 16.8 9.5 21"></path>
+                  </svg>
+                </span>
                 <span className="feed-label">Latest Announcement</span>
               </div>
               <h3 style={{ color: isRegOpen ? "var(--neon-white)" : "#FF4444", marginBottom: "8px", fontFamily: "var(--font-outfit)", fontSize: "clamp(1.1rem, 3.5vw, 1.25rem)" }}>
@@ -255,8 +340,13 @@ export default function FusionCampPage() {
 
             {/* Sneak Peek Gallery (Memories Teaser) */}
             <div className="card dashboard-item" style={{ padding: "clamp(18px, 4vw, 24px)" }}>
-              <div className="feed-header">
-                <span className="feed-icon">📸</span>
+              <div className="feed-header" style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
+                <span className="feed-icon" style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: "var(--neon-white)" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                    <circle cx="12" cy="13" r="4"></circle>
+                  </svg>
+                </span>
                 <span className="feed-label glow-text-white" style={{color: "var(--neon-white)"}}>Throwback Memories</span>
               </div>
               <div className="sneak-peek-gallery" style={{ height: "clamp(90px, 20vw, 120px)" }}>
@@ -302,12 +392,6 @@ export default function FusionCampPage() {
 
           </div>
         </section>
-
-        <div style={{ textAlign: "center", marginTop: "30px", marginBottom: "20px" }}>
-          <Link href="/" className="nav-item" style={{ display: "inline-block", padding: "10px 24px", border: "1px solid var(--neon-yellow)", borderRadius: "8px", textDecoration: "none", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
-            Back to Dashboard
-          </Link>
-        </div>
       </main>
     </>
   );

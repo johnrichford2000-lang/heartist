@@ -5,6 +5,7 @@ import Link from "next/link";
 import HeartistLogo from "@/components/HeartistLogo";
 import { fetchSystemSetting, saveSystemSetting } from "@/lib/fusionSync";
 import { supabase } from "@/lib/supabase";
+import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 
 function AnimatedDropdown({ value, options, onChange, label }: { value: string, options: string[], onChange: (val: string) => void, label?: string }) {
   const [isOpen, setIsOpen] = useState(false);
@@ -271,6 +272,57 @@ export default function MemoriesInteractivePage() {
 
   return (
     <main className="app-container" style={{ paddingBottom: "120px" }}>
+      {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Fusion Home) */}
+      <Link
+        href="/fusion"
+        aria-label="Back to Fusion"
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "18px",
+          zIndex: 9999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "rgba(10, 10, 10, 0.75)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid var(--neon-yellow)",
+          color: "var(--neon-yellow)",
+          textDecoration: "none",
+          boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+          transition: "all 0.25s ease",
+          cursor: "pointer"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+          e.currentTarget.style.transform = "translateX(-3px)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+          e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+          e.currentTarget.style.transform = "translateX(0)";
+        }}
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </Link>
+
       <header className="top-header" style={{ marginBottom: "20px" }}>
         <HeartistLogo className="animated-glow-text" width={30} height={30} />
         <h1 className="header-title glow-text-white" style={{ fontFamily: "var(--font-outfit)", fontSize: "2rem", marginTop: "10px" }}>
@@ -710,33 +762,50 @@ export default function MemoriesInteractivePage() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-              <h3 style={{ margin: 0, fontFamily: "var(--font-outfit)", color: "var(--neon-white, white)" }}>💛 Reactions</h3>
-              <button onClick={() => setLikersState(prev => ({ ...prev, isOpen: false }))} style={{ background: "transparent", border: "none", color: "var(--text-muted, gray)", cursor: "pointer", fontSize: "1.2rem" }}>✕</button>
+              <h3 style={{ margin: 0, fontFamily: "var(--font-outfit)", color: "var(--neon-white, white)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--neon-yellow)" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 6px rgba(255, 234, 0, 0.6))" }}>
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                </svg>
+                <span>Reactions</span>
+              </h3>
+              <button 
+                onClick={() => setLikersState(prev => ({ ...prev, isOpen: false }))} 
+                style={{ background: "transparent", border: "none", color: "var(--text-muted, gray)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "4px" }}
+                aria-label="Close modal"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
             </div>
             
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px", maxHeight: "300px", overflowY: "auto", paddingRight: "5px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "300px", overflowY: "auto", paddingRight: "5px" }}>
               {likersState.isLoading ? (
                 <p style={{ textAlign: "center", color: "var(--text-muted, gray)", fontSize: "0.9rem", margin: "20px 0" }}>Loading...</p>
               ) : likersState.users.length === 0 ? (
                 <p style={{ textAlign: "center", color: "var(--text-muted, gray)", fontSize: "0.9rem", margin: "20px 0" }}>No reactions yet.</p>
               ) : (
-                likersState.users.map((user, i) => (
-                  <div key={i} style={{ display: "flex", alignItems: "center", gap: "2px", padding: "8px", borderRadius: "8px", background: "rgba(255,255,255,0.03)" }}>
-                    {user.avatar_url ? (
-                      <img src={user.avatar_url} alt={user.first_name} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neon-yellow)", fontWeight: "900", fontFamily: "var(--font-outfit)" }}>
-                        {(user.first_name || "?").charAt(0)}
+                likersState.users.map((user, i) => {
+                  const displayName = formatFullName(user.first_name, user.last_name) || "Heartist";
+                  return (
+                    <div key={i} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "8px", borderRadius: "8px", background: "rgba(255,255,255,0.03)" }}>
+                      {user.avatar_url ? (
+                        <img src={user.avatar_url} alt={displayName} style={{ width: "36px", height: "36px", borderRadius: "50%", objectFit: "cover" }} />
+                      ) : (
+                        <div style={{ width: "36px", height: "36px", borderRadius: "50%", background: "transparent", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--neon-yellow)", fontWeight: "900", fontFamily: "var(--font-outfit)" }}>
+                          {(displayName || "?").charAt(0)}
+                        </div>
+                      )}
+                      <span style={{ fontSize: "0.95rem", color: "var(--neon-white)" }}>{displayName}</span>
+                      <div style={{ marginLeft: "auto" }}>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--neon-yellow)" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                        </svg>
                       </div>
-                    )}
-                    <span style={{ fontSize: "0.95rem" }}>{user.first_name} {user.last_name}</span>
-                    <div style={{ marginLeft: "auto" }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="var(--neon-yellow)" stroke="var(--neon-yellow)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                      </svg>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

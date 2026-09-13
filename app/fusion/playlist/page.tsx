@@ -49,6 +49,57 @@ export default function PlaylistPage() {
 
   return (
     <main className="app-container" style={{ paddingBottom: "120px" }}>
+      {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Fusion Home) */}
+      <Link
+        href="/fusion"
+        aria-label="Back to Fusion"
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "18px",
+          zIndex: 9999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "rgba(10, 10, 10, 0.75)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid var(--neon-yellow)",
+          color: "var(--neon-yellow)",
+          textDecoration: "none",
+          boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+          transition: "all 0.25s ease",
+          cursor: "pointer"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+          e.currentTarget.style.transform = "translateX(-3px)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+          e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+          e.currentTarget.style.transform = "translateX(0)";
+        }}
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </Link>
+
       {/* Header */}
       <header className="top-header" style={{ marginBottom: "20px" }}>
         <HeartistLogo className="animated-glow-text" width={30} height={30} />

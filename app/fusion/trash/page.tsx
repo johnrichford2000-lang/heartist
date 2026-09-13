@@ -189,7 +189,12 @@ export default function TrashPage() {
       <section style={{ marginBottom: "40px" }}>
         {trashedPosts.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: "50px 20px", borderTop: "2px solid rgba(255,255,255,0.1)" }}>
-            <span style={{ fontSize: "3rem", display: "block", marginBottom: "15px", opacity: 0.5 }}>🗑️</span>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px", opacity: 0.5, color: "var(--text-muted)" }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </div>
             <h3 style={{ color: "var(--text-muted)", fontFamily: "var(--font-outfit)", fontSize: "1.2rem", margin: 0 }}>Your trash is empty.</h3>
           </div>
         ) : (

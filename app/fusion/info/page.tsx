@@ -304,6 +304,57 @@ export default function BlueprintPage() {
 
   return (
     <main className="app-container" style={{ paddingBottom: "120px" }}>
+      {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Fusion Home) */}
+      <Link
+        href="/fusion"
+        aria-label="Back to Fusion"
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "18px",
+          zIndex: 9999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "rgba(10, 10, 10, 0.75)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid var(--neon-yellow)",
+          color: "var(--neon-yellow)",
+          textDecoration: "none",
+          boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+          transition: "all 0.25s ease",
+          cursor: "pointer"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+          e.currentTarget.style.transform = "translateX(-3px)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+          e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+          e.currentTarget.style.transform = "translateX(0)";
+        }}
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
+        >
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </Link>
+
       {/* Header */}
       <header className="top-header" style={{ marginBottom: "30px" }}>
         <HeartistLogo className="animated-glow-text" width={30} height={30} />
@@ -356,8 +407,17 @@ export default function BlueprintPage() {
                   transition: "all 0.3s"
                 }}
               >
-                <div style={{ fontSize: "1.5rem", transition: "transform 0.3s", transform: item.checked ? "scale(1.1)" : "scale(1)" }}>
-                  {item.checked ? "💛" : "💔"}
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", transition: "transform 0.3s", transform: item.checked ? "scale(1.1)" : "scale(1)", flexShrink: 0 }}>
+                  {item.checked ? (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="var(--neon-yellow)" stroke="var(--neon-yellow)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ filter: "drop-shadow(0 0 6px rgba(255, 234, 0, 0.7))" }}>
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                    </svg>
+                  ) : (
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#555" stroke="#777" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.85 }}>
+                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+                      <polyline points="12 4.5 9.5 8.5 13.5 12 10 16 12 21.2" stroke="rgba(10,10,10,0.95)" strokeWidth="2.5" />
+                    </svg>
+                  )}
                 </div>
                 <span style={{ 
                   color: item.checked ? "var(--neon-yellow)" : "var(--text-main)", 
@@ -454,7 +514,7 @@ export default function BlueprintPage() {
                           <h5 style={{ color: "var(--neon-white)", fontSize: "1rem", fontFamily: "var(--font-outfit)", marginBottom: "10px", textTransform: "uppercase", letterSpacing: "1px", opacity: 0.8 }}>
                             {groupTitle}
                           </h5>
-                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(250px, 1fr))", gap: "20px" }}>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 240px), 1fr))", gap: "20px" }}>
                             {uniqueGroupMembers.map((member, idx) => (
                               <div key={idx} className="card" style={{ textAlign: "center", padding: "20px 10px" }}>
                                 <div style={{ width: "80px", height: "80px", margin: "0 auto 15px", borderRadius: "50%", overflow: "hidden", border: "2px solid var(--neon-yellow)", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "3.5rem", background: "rgba(255,255,255,0.1)" }}>

@@ -44,28 +44,59 @@ export default function SongLyricsPage({ params }: { params: Promise<{ id: strin
 
   return (
     <main className="app-container" style={{ paddingBottom: "120px" }}>
-      {/* Header with Back Button */}
-      <header className="top-header" style={{ marginBottom: "20px", textAlign: "center", position: "relative" }}>
-        {/* Back Button at the Top Left */}
-        <Link 
-          href="/fusion/playlist" 
-          style={{ 
-            position: "absolute", 
-            left: 0, 
-            top: "50%", 
-            transform: "translateY(-50%)", 
-            color: "var(--neon-yellow)", 
-            textDecoration: "none", 
-            fontFamily: "var(--font-outfit)",
-            fontSize: "0.9rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "5px"
-          }}
+      {/* Top-Left Back Button (Pure SVG Icon, Fixed to Screen Top-Left, Navigates to Playlist) */}
+      <Link
+        href="/fusion/playlist"
+        aria-label="Back to Playlist"
+        style={{
+          position: "fixed",
+          top: "18px",
+          left: "18px",
+          zIndex: 9999,
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          width: "44px",
+          height: "44px",
+          borderRadius: "12px",
+          background: "rgba(10, 10, 10, 0.75)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          border: "1px solid var(--neon-yellow)",
+          color: "var(--neon-yellow)",
+          textDecoration: "none",
+          boxShadow: "0 0 14px rgba(255, 234, 0, 0.2)",
+          transition: "all 0.25s ease",
+          cursor: "pointer"
+        }}
+        onMouseOver={(e) => {
+          e.currentTarget.style.background = "rgba(255, 234, 0, 0.18)";
+          e.currentTarget.style.boxShadow = "0 0 20px rgba(255, 234, 0, 0.45)";
+          e.currentTarget.style.transform = "translateX(-3px)";
+        }}
+        onMouseOut={(e) => {
+          e.currentTarget.style.background = "rgba(10, 10, 10, 0.75)";
+          e.currentTarget.style.boxShadow = "0 0 14px rgba(255, 234, 0, 0.2)";
+          e.currentTarget.style.transform = "translateX(0)";
+        }}
+      >
+        <svg 
+          width="22" 
+          height="22" 
+          viewBox="0 0 24 24" 
+          fill="none" 
+          stroke="currentColor" 
+          strokeWidth="2.5" 
+          strokeLinecap="round" 
+          strokeLinejoin="round"
         >
-          <span style={{ fontSize: "1.2rem" }}>◀</span> Back
-        </Link>
+          <line x1="19" y1="12" x2="5" y2="12"></line>
+          <polyline points="12 19 5 12 12 5"></polyline>
+        </svg>
+      </Link>
 
+      {/* Header */}
+      <header className="top-header" style={{ marginBottom: "20px", textAlign: "center", position: "relative" }}>
         <h1 className="header-title glow-text-white" style={{ fontFamily: "var(--font-outfit)", fontSize: "1.5rem", margin: 0, textTransform: "uppercase" }}>
           {song.type}
         </h1>

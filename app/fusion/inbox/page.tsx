@@ -169,7 +169,12 @@ export default function InboxPage() {
       <section style={{ marginBottom: "40px" }}>
         {messages.length === 0 ? (
           <div className="card" style={{ textAlign: "center", padding: "50px 20px", borderTop: "2px solid rgba(255,255,255,0.1)" }}>
-            <span style={{ fontSize: "3rem", display: "block", marginBottom: "15px", opacity: 0.5 }}>📭</span>
+            <div style={{ display: "flex", justifyContent: "center", marginBottom: "15px", opacity: 0.5, color: "var(--text-muted)" }}>
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline>
+                <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+              </svg>
+            </div>
             <h3 style={{ color: "var(--text-muted)", fontFamily: "var(--font-outfit)", fontSize: "1.2rem", margin: 0 }}>Your inbox is empty.</h3>
           </div>
         ) : (
