@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
-import BadgeIcon from "@/components/BadgeIcon";
+import BadgeIcon, { getBadgeDefinition } from "@/components/BadgeIcon";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
@@ -115,6 +115,15 @@ export default function NotificationsPage() {
                    } catch(e) {}
                  }
                });
+
+                try {
+                  const localNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
+                  localNotifs.forEach((ln: any) => {
+                    if (ln && !regularNotifs.some((rn: any) => rn.id === ln.id || (ln.supabase_id && rn.supabase_id === ln.supabase_id))) {
+                      regularNotifs.push(ln);
+                    }
+                  });
+                } catch(e) {}
                
                const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
                const myInbox = [
@@ -180,56 +189,95 @@ export default function NotificationsPage() {
                );
 
                myNotifs.sort((a: any, b: any) => a.timestamp - b.timestamp);
-               const allGroups: any[][] = [];
-               const keyMap = new Map<string, { mainGroup: any[]; standaloneGroups: any[][]; seenUsers: Set<string> }>();
+                const roleUpdates: any[] = [];
+                const regularInteractions: any[] = [];
 
-               myNotifs.forEach((n: any) => {
-                 const key = (n.postContent || "unknown_post") + "_" + (n.type || "reaction");
-                 if (!keyMap.has(key)) {
-                   keyMap.set(key, { mainGroup: [], standaloneGroups: [], seenUsers: new Set<string>() });
-                 }
+                myNotifs.forEach((n: any) => {
+                  const isRoleUpdate = 
+                    n.type === "badge_and_team_update" || 
+                    n.type === "badge_update" || 
+                    n.type === "team_add" || 
+                    n.type === "team_remove" || 
+                    n.type === "team_update" || 
+                    n.type?.includes("badge") || 
+                    n.type?.includes("team");
 
-                 const state = keyMap.get(key)!;
-                 const user = n.fromUser || n.sourceName;
+                  if (isRoleUpdate) {
+                    roleUpdates.push({
+                      id: n.supabase_id || n.id,
+                      supabase_id: n.supabase_id,
+                      category: "Updates",
+                      type: n.type,
+                      postContent: n.postContent,
+                      postId: "profile",
+                      timestamp: n.timestamp,
+                      read: !!n.read,
+                      users: n.users && n.users.length > 0 ? n.users : [n.adminName || "Admin"],
+                      badge: n.badge,
+                      badgeLabel: n.badgeLabel || (n.badge ? getBadgeDefinition(n.badge).label : ""),
+                      badgeColor: n.badgeColor || (n.badge ? getBadgeDefinition(n.badge).color : ""),
+                      team: n.team,
+                      oldBadge: n.oldBadge,
+                      oldTeam: n.oldTeam,
+                      badgeChanged: n.badgeChanged,
+                      teamChanged: n.teamChanged,
+                      adminName: n.adminName || (n.users && n.users[0]) || "Admin",
+                    });
+                  } else {
+                    regularInteractions.push(n);
+                  }
+                });
 
-                 if (user && !state.seenUsers.has(user)) {
-                   state.seenUsers.add(user);
-                   state.mainGroup.push(n);
-                 } else {
-                   state.standaloneGroups.push([n]);
-                 }
-               });
+                const allGroups: any[][] = [];
+                const keyMap = new Map<string, { mainGroup: any[]; standaloneGroups: any[][]; seenUsers: Set<string> }>();
 
-               keyMap.forEach((state) => {
-                 if (state.mainGroup.length > 0) allGroups.push(state.mainGroup);
-                 state.standaloneGroups.forEach((group) => allGroups.push(group));
-               });
+                regularInteractions.forEach((n: any) => {
+                  const key = (n.postContent || "unknown_post") + "_" + (n.type || "reaction");
+                  if (!keyMap.has(key)) {
+                    keyMap.set(key, { mainGroup: [], standaloneGroups: [], seenUsers: new Set<string>() });
+                  }
 
-               const mappedNotifications = allGroups.map((group) => {
-                 const recentNotif = group[group.length - 1];
-                 const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
+                  const state = keyMap.get(key)!;
+                  const user = n.fromUser || n.sourceName;
 
-                 let category = "Interactions";
-                 if (recentNotif.type.includes("mention")) category = "Mentions";
-                 else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
-                 else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
-                 
-                 return {
-                   id: recentNotif.supabase_id || recentNotif.id,
-                   supabase_id: recentNotif.supabase_id,
-                   category: category,
-                   type: recentNotif.type || "reaction",
-                   mentionType: recentNotif.mentionType,
-                   postContent: recentNotif.postContent,
-                   postId: recentNotif.postId,
-                   timestamp: recentNotif.timestamp,
-                   read: group.every((n: any) => n.read),
-                   users: uniqueUsers,
-                 };
-               });
+                  if (user && !state.seenUsers.has(user)) {
+                    state.seenUsers.add(user);
+                    state.mainGroup.push(n);
+                  } else {
+                    state.standaloneGroups.push([n]);
+                  }
+                });
 
-               const combinedNotifications = [...mappedNotifications, ...finalAdminNotifs];
-               setNotifications(combinedNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
+                keyMap.forEach((state) => {
+                  if (state.mainGroup.length > 0) allGroups.push(state.mainGroup);
+                  state.standaloneGroups.forEach((group) => allGroups.push(group));
+                });
+
+                const mappedNotifications = allGroups.map((group) => {
+                  const recentNotif = group[group.length - 1];
+                  const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
+
+                  let category = "Interactions";
+                  if (recentNotif.type.includes("mention")) category = "Mentions";
+                  else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
+                  else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
+                  
+                  return {
+                    id: recentNotif.supabase_id || recentNotif.id,
+                    supabase_id: recentNotif.supabase_id,
+                    category: category,
+                    type: recentNotif.type || "reaction",
+                    mentionType: recentNotif.mentionType,
+                    postContent: recentNotif.postContent,
+                    postId: recentNotif.postId,
+                    timestamp: recentNotif.timestamp,
+                    read: group.every((n: any) => n.read),
+                    users: uniqueUsers,
+                  };
+                });
+
+                const combinedNotifications = [...roleUpdates, ...mappedNotifications, ...finalAdminNotifs];
+                setNotifications(combinedNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
             }
          } catch (e) {
              console.error("Failed to load inbox", e);
@@ -646,10 +694,17 @@ export default function NotificationsPage() {
                 badge,
               } = getUserDetails(notif.users[0] || notif.postAuthor || "User");
 
-              if (
+              const isRoleOrTeamUpdate =
+                notif.type === "badge_and_team_update" ||
                 notif.type === "badge_update" ||
                 notif.type === "team_add" ||
                 notif.type === "team_remove" ||
+                notif.type === "team_update" ||
+                notif.type?.includes("badge") ||
+                notif.type?.includes("team");
+
+              if (
+                isRoleOrTeamUpdate ||
                 notif.type === "prayer_deleted" ||
                 notif.type === "post_deleted" || notif.type === "comment_deleted"
               ) {
@@ -663,7 +718,7 @@ export default function NotificationsPage() {
                   recentFullName = adminAcc.firstName;
                   avatar = adminAcc.avatar || "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
                 } else {
-                  recentFullName = "Admin";
+                  recentFullName = notif.adminName || "Admin";
                   avatar = "https://zdnmideipijqfehgzmos.supabase.co/storage/v1/object/public/avatars/default_avatar.jpg";
                 }
                 team = "none";
@@ -688,9 +743,10 @@ export default function NotificationsPage() {
                 </span>
               );
               const isAdminAction =
-                notif.type === "badge_update" ||
-                notif.type === "team_add" ||
-                notif.type === "team_remove";
+                isRoleOrTeamUpdate ||
+                notif.type === "prayer_deleted" ||
+                notif.type === "post_deleted" ||
+                notif.type === "comment_deleted";
               if (notif.users.length === 2 && !isAdminAction) {
                 const { fullName: secondFullName, badge: secondBadge } =
                   getUserDetails(notif.users[1]);
@@ -782,13 +838,9 @@ export default function NotificationsPage() {
                       return;
                     }
 
-                    if (notif.type === "badge_update" || notif.type?.includes("badge")) {
+                    if (isRoleOrTeamUpdate) {
+                      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
                       router.push("/profile?scrollTo=badge");
-                      return;
-                    }
-
-                    if (notif.type === "team_add" || notif.type === "team_remove") {
-                      router.push("/profile?scrollTo=team");
                       return;
                     }
 
@@ -821,7 +873,9 @@ export default function NotificationsPage() {
                         ? "4px solid #FF4444"
                         : notif.type === "pray"
                           ? "4px solid var(--neon-yellow)"
-                          : "4px solid var(--neon-white)",
+                          : isRoleOrTeamUpdate
+                            ? `4px solid ${notif.badgeColor || "var(--neon-yellow)"}`
+                            : "4px solid var(--neon-white)",
                     animation: "fadeIn 0.3s ease",
                     gap: "6px",
                     cursor: "pointer",
@@ -970,9 +1024,7 @@ export default function NotificationsPage() {
                             <circle cx="12" cy="12" r="4" />
                             <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
                           </svg>
-                        ) : notif.type === "badge_update" ||
-                          notif.type === "team_add" ||
-                          notif.type === "team_remove" ? (
+                        ) : isRoleOrTeamUpdate ? (
                           <BadgeIcon badge="admin" size={13} />
                         ) : notif.type === "prayer_deleted" ||
                           notif.type === "post_deleted" ||
@@ -1015,120 +1067,232 @@ export default function NotificationsPage() {
                         textAlign: "justify",
                       }}
                     >
-                      {/* Inline Text */}
-                      <div
-                        style={{
-                          fontSize: "0.9rem",
-                          color: "var(--neon-white)",
-                          lineHeight: "1.4",
-                        }}
-                      >
-                        <span
+                      {isRoleOrTeamUpdate ? (
+                        <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "8px" }}>
+                          <div style={{ fontSize: "0.95rem", color: "var(--neon-white)", lineHeight: "1.4" }}>
+                            <span style={{ fontWeight: "bold", fontSize: "0.95rem", marginRight: "4px" }}>
+                              {actorsText}
+                            </span>
+                            <span style={{ opacity: 0.95 }}>
+                              {notif.type === "badge_and_team_update"
+                                ? "updated your role badge and team color!"
+                                : notif.type === "badge_update" || notif.type?.includes("badge")
+                                ? "updated your role badge!"
+                                : notif.type === "team_remove" || notif.team === "none"
+                                ? "removed your team color."
+                                : "assigned you a new team color!"}
+                            </span>
+                          </div>
+
+                          {/* Dedicated Info Box for Badge and Team */}
+                          <div
+                            style={{
+                              background: "rgba(255, 255, 255, 0.04)",
+                              border: `1px solid ${notif.badgeColor ? `${notif.badgeColor}40` : "rgba(255, 255, 255, 0.12)"}`,
+                              borderRadius: "10px",
+                              padding: "10px 14px",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "8px",
+                              boxShadow: notif.badgeColor ? `0 0 15px ${notif.badgeColor}15` : "none",
+                            }}
+                          >
+                            {/* Role Badge Info */}
+                            {(notif.type === "badge_and_team_update" || notif.type === "badge_update" || notif.badge || notif.type?.includes("badge")) && (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                  Role Badge:
+                                </span>
+                                {(() => {
+                                  const bDef = notif.badge ? getBadgeDefinition(notif.badge) : (notif.postContent ? getBadgeDefinition(notif.postContent) : null);
+                                  const bId = notif.badge || (bDef ? bDef.id : "Heartist");
+                                  const bColor = notif.badgeColor || (bDef ? bDef.color : "#22C55E");
+                                  const bLabel = notif.badgeLabel || (bDef ? bDef.label : (notif.postContent || "Member"));
+                                  return (
+                                    <div
+                                      style={{
+                                        display: "inline-flex",
+                                        alignItems: "center",
+                                        gap: "6px",
+                                        padding: "4px 12px",
+                                        borderRadius: "14px",
+                                        background: `${bColor}20`,
+                                        border: `1px solid ${bColor}66`,
+                                      }}
+                                    >
+                                      <BadgeIcon badge={bId} size={15} color={bColor} />
+                                      <span style={{ color: bColor, fontWeight: "bold", fontSize: "0.85rem" }}>
+                                        {bLabel}
+                                      </span>
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            )}
+
+                            {/* Team Color Info */}
+                            {(notif.type === "badge_and_team_update" || notif.type?.includes("team") || notif.team) && (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                  Team Color:
+                                </span>
+                                {notif.team && notif.team !== "none" ? (
+                                  <div
+                                    style={{
+                                      display: "inline-flex",
+                                      alignItems: "center",
+                                      gap: "7px",
+                                      padding: "4px 12px",
+                                      borderRadius: "14px",
+                                      background: `${notif.team}22`,
+                                      border: `1px solid ${notif.team}66`,
+                                      boxShadow: `0 0 8px ${notif.team}33`,
+                                    }}
+                                  >
+                                    <span
+                                      style={{
+                                        width: "10px",
+                                        height: "10px",
+                                        borderRadius: "50%",
+                                        background: notif.team,
+                                        border: "1px solid rgba(255, 255, 255, 0.6)",
+                                        display: "inline-block",
+                                      }}
+                                    />
+                                    <span style={{ color: notif.team, fontWeight: "bold", fontSize: "0.85rem", textTransform: "capitalize" }}>
+                                      Team {notif.team}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                                    None
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Tap callout */}
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "4px",
+                                marginTop: "2px",
+                                fontSize: "0.78rem",
+                                color: notif.badgeColor || "var(--neon-yellow)",
+                                fontWeight: "600",
+                              }}
+                            >
+                              <span>Tap to view in your profile</span>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 18 15 12 9 6" />
+                              </svg>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div
                           style={{
-                            fontWeight: "bold",
-                            fontSize: "0.95rem",
-                            marginRight: "4px",
+                            fontSize: "0.9rem",
+                            color: "var(--neon-white)",
+                            lineHeight: "1.4",
                           }}
                         >
-                          {actorsText}
-                        </span>
-                        {notif.type === "comment" ||
-                        notif.type === "comment_reply" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            {notif.type === "comment_reply"
-                              ? "replied to a comment on a post"
-                              : "commented on a post"}
-                            {notif.postContent && (
-                              <>
-                                :{" "}
-                                <span
-                                  style={{
-                                    fontStyle: "italic",
-                                    color: "var(--text-muted)",
-                                  }}
-                                >
-                                  "{notif.postContent}"
-                                </span>
-                              </>
-                            )}
+                          <span
+                            style={{
+                              fontWeight: "bold",
+                              fontSize: "0.95rem",
+                              marginRight: "4px",
+                            }}
+                          >
+                            {actorsText}
                           </span>
-                        ) : notif.type === "badge_update" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            updated your role badge{notif.postContent ? <> to <strong style={{ color: "var(--neon-yellow)" }}>{notif.postContent}</strong></> : ""}! <span style={{ fontSize: "0.8rem", color: "var(--neon-yellow)", fontStyle: "italic", marginLeft: "4px" }}>(Tap to view in profile)</span>
-                          </span>
-                        ) : notif.type === "team_add" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            assigned you a Team Color!
-                          </span>
-                        ) : notif.type === "team_remove" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            removed your Team Color.
-                          </span>
-                        ) : notif.type === "prayer_deleted" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            deleted your prayer request for violating guidelines.
-                          </span>
-                        ) : notif.type === "post_deleted" || notif.type === "comment_deleted" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            deleted your post/comment for violating guidelines.
-                          </span>
-                        ) : notif.type === "pray" ? (
-                          <span style={{ opacity: 0.9 }}>
-                            prayed for you
-                            {notif.postContent ? (
-                              <>
-                                :{" "}
-                                <span
-                                  style={{
-                                    fontStyle: "italic",
-                                    color: "var(--text-muted)",
-                                  }}
-                                >
-                                  "{notif.postContent}"
-                                </span>
-                              </>
-                            ) : (
-                              "."
-                            )}
-                          </span>
-                        ) : notif.type.includes("mention") ? (
-                          <span style={{ opacity: 0.9 }}>
-                            mentioned you in a {notif.mentionType}
-                            {notif.postContent ? (
-                              <>
-                                :{" "}
-                                <span
-                                  style={{
-                                    fontStyle: "italic",
-                                    color: "var(--text-muted)",
-                                  }}
-                                >
-                                  "{notif.postContent}"
-                                </span>
-                              </>
-                            ) : (
-                              "."
-                            )}
-                          </span>
-                        ) : (
-                          <span style={{ opacity: 0.9 }}>
-                            reacted to a post
-                            {notif.postContent && (
-                              <>
-                                :{" "}
-                                <span
-                                  style={{
-                                    fontStyle: "italic",
-                                    color: "var(--text-muted)",
-                                  }}
-                                >
-                                  "{notif.postContent}"
-                                </span>
-                              </>
-                            )}
-                          </span>
-                        )}
-                      </div>
+                          {notif.type === "comment" ||
+                          notif.type === "comment_reply" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              {notif.type === "comment_reply"
+                                ? "replied to a comment on a post"
+                                : "commented on a post"}
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "prayer_deleted" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              deleted your prayer request for violating guidelines.
+                            </span>
+                          ) : notif.type === "post_deleted" || notif.type === "comment_deleted" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              deleted your post/comment for violating guidelines.
+                            </span>
+                          ) : notif.type === "pray" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              prayed for you
+                              {notif.postContent ? (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              ) : (
+                                "."
+                              )}
+                            </span>
+                          ) : notif.type.includes("mention") ? (
+                            <span style={{ opacity: 0.9 }}>
+                              mentioned you in a {notif.mentionType}
+                              {notif.postContent ? (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              ) : (
+                                "."
+                              )}
+                            </span>
+                          ) : (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to a post
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <div
                         style={{
                           fontSize: "0.8rem",
