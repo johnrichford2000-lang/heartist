@@ -26,6 +26,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  async redirects() {
+    return [
+      {
+        source: "/fusion/inbox",
+        destination: "/notifications",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

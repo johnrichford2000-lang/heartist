@@ -77,7 +77,7 @@ export const fetchNotifications = async (userId: string) => {
   return data as Notification[];
 };
 
-export const createNotification = async (notif: Omit<Notification, "id" | "created_at" | "is_read">) => {
+export const createNotification = async (notif: Omit<Notification, "id" | "created_at" | "is_read">, skipBroadcast: boolean = false) => {
   const { data, error } = await supabase
     .from("notifications")
     .insert([notif])
@@ -90,8 +90,10 @@ export const createNotification = async (notif: Omit<Notification, "id" | "creat
   
   const insertedNotif = data[0] as Notification;
   
-  // Broadcast for real-time UI updates
-  broadcastNotification(insertedNotif);
+  // Broadcast for real-time UI updates if not skipped
+  if (!skipBroadcast) {
+    broadcastNotification(insertedNotif);
+  }
   
   return insertedNotif;
 };
@@ -156,15 +158,22 @@ export const dispatchNotification = async (notifLocal: any) => {
     post_id: notifLocal.postId ? String(notifLocal.postId) : undefined,
   };
   
-  await createNotification(dbNotif);
+  // Insert into DB with skipBroadcast to avoid double firing
+  const inserted = await createNotification(dbNotif, true);
   
   // Run auto-cleanup to prevent storage bloat
   if (recipient_id !== "everyone") {
     autoCleanupNotifications(recipient_id);
   }
   
-  // Broadcast local payload fields as well (for instant badge / client sync)
-  broadcastNotification(notifLocal);
+  // Single authoritative unified broadcast with both the database UUID and the local properties
+  const unifiedPayload = {
+    ...notifLocal,
+    id: notifLocal.id || inserted?.id,
+    supabase_id: inserted?.id,
+    recipient_id,
+  };
+  broadcastNotification(unifiedPayload);
 };
 
 export const autoCleanupNotifications = async (userId: string) => {

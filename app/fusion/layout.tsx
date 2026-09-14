@@ -52,12 +52,7 @@ export default function FusionLayout({ children }: { children: React.ReactNode }
         const currentUsernameFullName = `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
         const notifs = JSON.parse(localStorage.getItem("fusionNotifications") || "[]");
         const myUnread = notifs.filter((n: any) => (n.postAuthor === currentUsername || n.postAuthor === currentUsernameFullName || n.userId === currentUsernameFullName || n.userId === currentUsername) && !n.seen);
-        
-        const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
-        const myInbox = inboxData[currentUsername] || [];
-        const unreadInbox = myInbox.filter((m: any) => !m.read);
-
-        setUnreadNotifs(myUnread.length + unreadInbox.length);
+        setUnreadNotifs(myUnread.length);
       };
 
       checkNotifs();
@@ -88,7 +83,7 @@ export default function FusionLayout({ children }: { children: React.ReactNode }
       {children}
       
       {/* Primary Bottom Navigation Bar for Fusion Camp - Smart Auto-Fit */}
-      {pathname !== "/fusion/inbox" && pathname !== "/fusion/trash" && (
+      {pathname !== "/fusion/trash" && (
         <div style={{ position: "fixed", bottom: 0, left: 0, width: "100%", background: "rgba(10, 10, 10, 0.95)", borderTop: "1px solid rgba(255, 234, 0, 0.3)", backdropFilter: "blur(10px)", zIndex: 1000 }}>
           <div ref={scrollRef} className="fusion-bottom-nav-container">
             {/* Main */}

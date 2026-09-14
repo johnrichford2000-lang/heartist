@@ -80,15 +80,21 @@ export default function NotificationListener() {
     const processIncomingNotification = (n: any) => {
       if (!n) return;
       try {
-        const current = JSON.parse(localStorage.getItem('communityNotifications') || '[]');
-        
+        let payload = n;
+        if (n.message && typeof n.message === 'string' && (n.message.startsWith('{') || n.message.startsWith('['))) {
+          try {
+            const parsed = JSON.parse(n.message);
+            payload = { ...parsed, supabase_id: n.id || parsed.supabase_id, recipient_id: n.recipient_id || parsed.recipient_id };
+          } catch(e) {}
+        }
+
         // Check if this is a block notification for the active user
-        if (n.type && (n.type.toUpperCase() === "BLOCK" || n.type.toUpperCase() === "BLOCKED")) {
+        if (payload.type && (payload.type.toUpperCase() === "BLOCK" || payload.type.toUpperCase() === "BLOCKED")) {
           if (typeof window !== "undefined" && (window.location.pathname === "/login" || window.location.pathname === "/banned")) return;
           const activeStr = localStorage.getItem("activeUser");
-          if (activeStr && n.recipient_id) {
+          if (activeStr && payload.recipient_id) {
             const pUser = JSON.parse(activeStr);
-            const rId = String(n.recipient_id).trim().toLowerCase();
+            const rId = String(payload.recipient_id).trim().toLowerCase();
             const uId = String(pUser.id || "").trim().toLowerCase();
             const uFirst = String(pUser.firstName || "").trim().toLowerCase();
             const uFull = String(pUser.fullName || `${pUser.firstName || ""} ${pUser.lastName || ""}`).trim().toLowerCase();
@@ -114,17 +120,40 @@ export default function NotificationListener() {
         }
 
         // Check if this is a badge or team update for the active user
-        if (n.type === "badge_update" || n.type === "badge_and_team_update" || n.type?.includes("badge") || n.type?.includes("team")) {
-          handleBadgeNotification(n);
+        if (payload.type === "badge_update" || payload.type === "badge_and_team_update" || payload.type?.includes("badge") || payload.type?.includes("team")) {
+          handleBadgeNotification(payload);
         }
         
-        if (n.id && !current.find((x: any) => x.id === n.id)) {
-          current.push(n);
+        const current = JSON.parse(localStorage.getItem('communityNotifications') || '[]');
+        
+        // Strict deduplication check
+        const existingIndex = current.findIndex((x: any) => {
+          if (x.id && payload.id && x.id === payload.id) return true;
+          if (x.supabase_id && payload.supabase_id && x.supabase_id === payload.supabase_id) return true;
+          if (x.supabase_id && payload.id && x.supabase_id === payload.id) return true;
+          if (x.id && payload.supabase_id && x.id === payload.supabase_id) return true;
+          
+          // Semantic match (same action from same user on same post within 10 seconds)
+          const sameType = x.type === payload.type;
+          const sameActor = (x.fromUser || x.sourceName) === (payload.fromUser || payload.sourceName);
+          const samePost = String(x.postId || '') === String(payload.postId || '');
+          const closeTime = Math.abs((x.timestamp || 0) - (payload.timestamp || 0)) < 10000;
+          return sameType && sameActor && samePost && closeTime;
+        });
+
+        if (existingIndex >= 0) {
+          // Update existing item with supabase_id if missing, but do not append duplicate
+          if (payload.supabase_id && !current[existingIndex].supabase_id) {
+            current[existingIndex].supabase_id = payload.supabase_id;
+            localStorage.setItem('communityNotifications', JSON.stringify(current));
+          }
+        } else {
+          current.push(payload);
           localStorage.setItem('communityNotifications', JSON.stringify(current));
         }
 
         // Wake up bottom nav and all listeners immediately in realtime
-        window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: n }));
+        window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: payload }));
         window.dispatchEvent(new Event("storage"));
       } catch (e) {
         console.error("Broadcast notification error", e);

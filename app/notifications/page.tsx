@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
 import BadgeIcon, { getBadgeDefinition } from "@/components/BadgeIcon";
 import { useRouter } from "next/navigation";
@@ -14,6 +14,10 @@ export default function NotificationsPage() {
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [, setTimeTicker] = useState(0);
+
+  const isFetchingRef = useRef(false);
+  const pendingFetchRef = useRef(false);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Live timer interval to update relative timestamps (just now -> 1 minute ago, etc.) in real time
   useEffect(() => {
@@ -53,329 +57,417 @@ export default function NotificationsPage() {
       setAccounts(accs);
 
       const fetchInbox = async () => {
-          try {
-              let userUuid = currentUserObj.id;
-              if (!userUuid || !userUuid.includes("-")) {
-                const foundAcc = accs.find((a: any) => 
-                  (currentUser && a.firstName?.toLowerCase() === currentUser?.toLowerCase()) &&
-                  (currentUserObj.lastName && a.lastName?.toLowerCase() === currentUserObj.lastName?.toLowerCase())
-                );
-                if (foundAcc?.id) userUuid = foundAcc.id;
+        try {
+          let userUuid = currentUserObj.id;
+          if (!userUuid || !userUuid.includes("-")) {
+            const foundAcc = accs.find((a: any) => 
+              (currentUser && a.firstName?.toLowerCase() === currentUser?.toLowerCase()) &&
+              (currentUserObj.lastName && a.lastName?.toLowerCase() === currentUserObj.lastName?.toLowerCase())
+            );
+            if (foundAcc?.id) userUuid = foundAcc.id;
+          }
+
+          const targetIds = Array.from(new Set([
+            currentUserObj.id,
+            userUuid,
+            currentUser,
+            currentUserFullName,
+            currentUser?.toLowerCase(),
+            currentUserFullName?.toLowerCase(),
+            currentUserObj.email?.toLowerCase()
+          ])).filter(Boolean);
+
+          const { data: directData } = await supabase.from('notifications').select('*').in('recipient_id', targetIds).order('created_at', { ascending: false });
+          const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
+          
+          const seenMsgIds = new Set<string>();
+          const seenPayloadIds = new Set<string>();
+          const rawData = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          const data = rawData.filter((msg: any) => {
+            if (seenMsgIds.has(msg.id)) return false;
+            seenMsgIds.add(msg.id);
+            return true;
+          });
+         
+          if (data) {
+            const adminNotifs: any[] = [];
+            const regularNotifs: any[] = [];
+
+            data.forEach((msg: any) => {
+              const t = msg.type ? msg.type.toUpperCase() : "MESSAGE";
+              const isGetInvolved =
+                t.includes("GET_INVOLVED") ||
+                msg.sender_name === "Heartist Team" ||
+                (typeof msg.message === "string" && (
+                  msg.message.includes("reach out to get involved") ||
+                  msg.message.includes("part of our journey") ||
+                  msg.message.includes("heart to serve") ||
+                  (msg.message.includes("Heartist") && msg.message.includes("next steps"))
+                ));
+
+              if (isGetInvolved) {
+                adminNotifs.push({
+                  id: `get_involved_${msg.id}`,
+                  supabase_id: msg.id,
+                  isInboxItem: true,
+                  type: "GET_INVOLVED",
+                  targetUrl: `/get-involved?scrollTo=my-entries&subId=${msg.post_id || ""}`,
+                  filterCategory: "Get Involved",
+                  timestamp: new Date(msg.created_at).getTime(),
+                  read: msg.is_read,
+                  content: formatNotificationMessage(msg.message),
+                  senderName: "Heartist Team"
+                });
+              } else if (t.includes("WARN") || t.includes("PENALTY") || t.includes("MESSAGE") || t.includes("APPEAL") || t.includes("ALERT") || t.includes("MODERATION") || t.includes("UNBLOCKED")) {
+                let filterCategory = "Others";
+                if (t.includes("WARN") || t.includes("MESSAGE") || t.includes("MODERATION") || t.includes("UNBLOCKED")) filterCategory = "Warnings";
+                else if (t.includes("PENALTY")) filterCategory = "Penalties";
+                else if (t.includes("APPEAL")) filterCategory = "Reports";
+                else if (t.includes("ALERT")) filterCategory = "Deleted";
+                
+                adminNotifs.push({
+                  id: `inbox_${msg.id}`,
+                  supabase_id: msg.id,
+                  isInboxItem: true,
+                  type: msg.type,
+                  filterCategory,
+                  timestamp: new Date(msg.created_at).getTime(),
+                  read: msg.is_read,
+                  content: formatNotificationMessage(msg.message),
+                });
+              } else {
+                let parsedNotif: any = null;
+                try {
+                  if (typeof msg.message === "string" && (msg.message.startsWith("{") || msg.message.startsWith("["))) {
+                    parsedNotif = JSON.parse(msg.message);
+                  }
+                } catch(e) {}
+
+                if (parsedNotif && typeof parsedNotif === "object") {
+                  const actor = parsedNotif.fromUser || parsedNotif.sourceName || msg.sender_name || "";
+                  const pKey = parsedNotif.id || `${parsedNotif.type}_${actor}_${parsedNotif.postId || msg.post_id || ""}_${Math.floor((parsedNotif.timestamp || new Date(msg.created_at).getTime()) / 10000)}`;
+                  if (!seenPayloadIds.has(pKey)) {
+                    seenPayloadIds.add(pKey);
+                    parsedNotif.supabase_id = msg.id;
+                    parsedNotif.read = msg.is_read;
+                    regularNotifs.push(parsedNotif);
+                  }
+                } else {
+                  regularNotifs.push({
+                    id: msg.id,
+                    supabase_id: msg.id,
+                    type: msg.type,
+                    timestamp: new Date(msg.created_at).getTime(),
+                    read: msg.is_read,
+                    postContent: formatNotificationMessage(msg.message),
+                  });
+                }
+              }
+            });
+
+            try {
+              const localNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
+              localNotifs.forEach((ln: any) => {
+                if (!ln || isNotificationExpired(ln.timestamp || ln.created_at)) return;
+                
+                let item = ln;
+                if (ln.message && typeof ln.message === "string" && (ln.message.startsWith("{") || ln.message.startsWith("["))) {
+                  try {
+                    item = { ...JSON.parse(ln.message), supabase_id: ln.id, recipient_id: ln.recipient_id };
+                  } catch(e) {}
+                }
+
+                const isDup = regularNotifs.some((rn: any) => {
+                  if (rn.id && item.id && rn.id === item.id) return true;
+                  if (rn.supabase_id && item.supabase_id && rn.supabase_id === item.supabase_id) return true;
+                  if (rn.supabase_id && item.id && rn.supabase_id === item.id) return true;
+                  if (rn.id && item.supabase_id && rn.id === item.supabase_id) return true;
+
+                  const sameType = rn.type === item.type;
+                  const sameActor = (rn.fromUser || rn.sourceName) === (item.fromUser || item.sourceName);
+                  const samePost = String(rn.postId || "") === String(item.postId || "");
+                  const closeTime = Math.abs((rn.timestamp || 0) - (item.timestamp || 0)) < 15000;
+                  return sameType && sameActor && samePost && closeTime;
+                });
+
+                if (!isDup) {
+                  regularNotifs.push(item);
+                }
+              });
+            } catch(e) {}
+           
+            const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
+            const myInbox = [
+              ...(inboxData[currentUser] || []),
+              ...(inboxData[currentUserFullName] || []),
+            ].filter((v, i, a) => a.findIndex((t: any) => t.id === v.id) === i);
+            
+            const legacyInbox = myInbox
+              .filter((msg: any) => !isNotificationExpired(msg.timestamp))
+              .map((msg: any) => {
+              let filterCategory = "Others";
+              const t = msg.type || "MESSAGE";
+              if (t.includes("WARN")) filterCategory = "Warnings";
+              else if (t.includes("PENALTY")) filterCategory = "Penalties";
+              else if (t.includes("REPORT")) filterCategory = "Reports";
+              else if (t.includes("DELETE")) filterCategory = "Deleted";
+
+              let contentStr = formatNotificationMessage(msg.content || msg.message);
+
+              let tsVal = Date.now();
+              if (typeof msg.timestamp === "number" && !isNaN(msg.timestamp)) {
+                tsVal = msg.timestamp;
+              } else if (typeof msg.timestamp === "string") {
+                const parsedTs = Date.parse(msg.timestamp);
+                if (!isNaN(parsedTs)) tsVal = parsedTs;
+              } else if (typeof msg.id === "number" && !isNaN(msg.id) && msg.id > 100000000000) {
+                tsVal = msg.id;
               }
 
-              const targetIds = Array.from(new Set([
-                currentUserObj.id,
-                userUuid,
-                currentUser,
-                currentUserFullName,
-                currentUser?.toLowerCase(),
-                currentUserFullName?.toLowerCase(),
-                currentUserObj.email?.toLowerCase()
-              ])).filter(Boolean);
+              return {
+                id: `inbox_${msg.id}`,
+                isInboxItem: true,
+                type: msg.type,
+                filterCategory,
+                timestamp: tsVal,
+                read: msg.read,
+                content: contentStr,
+              };
+            });
 
-              const { data: directData } = await supabase.from('notifications').select('*').in('recipient_id', targetIds).order('created_at', { ascending: false });
-              const { data: everyoneData } = await supabase.from('notifications').select('*').eq('recipient_id', 'everyone').order('created_at', { ascending: false });
+            const finalAdminNotifs = [...adminNotifs, ...legacyInbox].sort((a, b) => b.timestamp - a.timestamp);
+
+            let modified = false;
+            regularNotifs.forEach((n: any) => {
+              if (
+                (n.type === "badge_update" ||
+                  n.type === "badge_and_team_update" ||
+                  n.type === "team_add" ||
+                  n.type === "team_remove" ||
+                  n.type === "prayer_deleted" ||
+                  n.type === "post_deleted" || n.type === "comment_deleted") &&
+                (!n.users || n.users[0] === "Admin" || !n.users[0])
+              ) {
+                const adminAcc = accs.find((a: any) => a.badge === "admin" && a.firstName);
+                const adminName = adminAcc ? adminAcc.firstName : "AdminRichford";
+                n.users = [adminName, n.postAuthor];
+                modified = true;
+              }
+            });
+
+            const myNotifs = regularNotifs.filter(
+              (n: any) =>
+                n.supabase_id ||
+                n.postAuthor === currentUser ||
+                n.postAuthor === currentUserFullName ||
+                n.postAuthor === currentUserObj?.id ||
+                n.userId === currentUserFullName ||
+                n.userId === currentUser ||
+                n.userId === currentUserObj?.id ||
+                n.recipient_id === currentUserObj?.id ||
+                n.recipient_id === currentUser ||
+                n.recipient_id === currentUserFullName ||
+                n.userId === "everyone"
+            );
+
+            myNotifs.sort((a: any, b: any) => a.timestamp - b.timestamp);
+            const roleUpdates: any[] = [];
+            const regularInteractions: any[] = [];
+
+            myNotifs.forEach((n: any) => {
+              const isRoleUpdate = 
+                n.type === "badge_and_team_update" || 
+                n.type === "badge_update" || 
+                n.type === "team_add" || 
+                n.type === "team_remove" || 
+                n.type === "team_update" || 
+                n.type?.includes("badge") || 
+                n.type?.includes("team");
+
+              if (isRoleUpdate) {
+                roleUpdates.push({
+                  id: n.supabase_id || n.id,
+                  supabase_id: n.supabase_id,
+                  category: "Updates",
+                  type: n.type,
+                  postContent: n.postContent,
+                  postId: "profile",
+                  timestamp: n.timestamp,
+                  read: !!n.read,
+                  users: n.users && n.users.length > 0 ? n.users : [n.adminName || "Admin"],
+                  badge: n.badge,
+                  badgeLabel: n.badgeLabel || (n.badge ? getBadgeDefinition(n.badge).label : ""),
+                  badgeColor: n.badgeColor || (n.badge ? getBadgeDefinition(n.badge).color : ""),
+                  team: n.team,
+                  oldBadge: n.oldBadge,
+                  oldTeam: n.oldTeam,
+                  badgeChanged: n.badgeChanged,
+                  teamChanged: n.teamChanged,
+                  adminName: n.adminName || (n.users && n.users[0]) || "Admin",
+                });
+              } else {
+                regularInteractions.push(n);
+              }
+            });
+
+            // 1. Deduplicate individual interactions so identical events are only recorded once
+            const dedupedInteractions: any[] = [];
+            const seenInteractionKeys = new Set<string>();
+
+            regularInteractions.forEach((n: any) => {
+              const actor = n.fromUser || n.sourceName || n.senderId || n.users?.[0] || "unknown";
+              const post = String(n.postId || n.postContent || "post");
+              const type = n.type || "reaction";
+              const commentId = n.commentId || "";
+              const replyId = n.replyId || "";
+              const timeBucket = Math.floor((n.timestamp || 0) / 10000); // 10s bucket
+              const key = `${type}_${actor}_${post}_${commentId}_${replyId}_${timeBucket}`;
+
+              if (!seenInteractionKeys.has(key)) {
+                seenInteractionKeys.add(key);
+                dedupedInteractions.push(n);
+              }
+            });
+
+            // 2. Group interactions by post and action type cleanly without duplicating cards
+            const groupMap = new Map<string, any[]>();
+            dedupedInteractions.forEach((n: any) => {
+              const groupKey = `${n.postId || n.postContent || "unknown_post"}_${n.type || "reaction"}`;
+              if (!groupMap.has(groupKey)) {
+                groupMap.set(groupKey, []);
+              }
+              groupMap.get(groupKey)!.push(n);
+            });
+
+            const allGroups: any[][] = [];
+            groupMap.forEach((groupItems) => {
+              if (groupItems.length > 0) {
+                allGroups.push(groupItems);
+              }
+            });
+
+            const mappedNotifications = allGroups.map((group) => {
+              const recentNotif = group[group.length - 1];
+              const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
+
+              let category = "Interactions";
+              if (recentNotif.type.includes("mention")) category = "Mentions";
+              else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
+              else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
               
-              const seenMsgIds = new Set<string>();
-              const seenPayloadIds = new Set<string>();
-              const rawData = [...(directData || []), ...(everyoneData || [])].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-              const data = rawData.filter((msg: any) => {
-                if (seenMsgIds.has(msg.id)) return false;
-                seenMsgIds.add(msg.id);
-                return true;
-              });
-             
-             if (data) {
-               const adminNotifs: any[] = [];
-               const regularNotifs: any[] = [];
+              return {
+                id: recentNotif.supabase_id || recentNotif.id,
+                supabase_id: recentNotif.supabase_id,
+                category: category,
+                type: recentNotif.type || "reaction",
+                mentionType: recentNotif.mentionType,
+                postContent: recentNotif.postContent,
+                postId: recentNotif.postId,
+                timestamp: recentNotif.timestamp,
+                read: group.every((n: any) => n.read),
+                users: uniqueUsers,
+              };
+            });
 
-               data.forEach((msg: any) => {
-                 const t = msg.type ? msg.type.toUpperCase() : "MESSAGE";
-                 const isGetInvolved =
-                   t.includes("GET_INVOLVED") ||
-                   msg.sender_name === "Heartist Team" ||
-                   (typeof msg.message === "string" && (
-                     msg.message.includes("reach out to get involved") ||
-                     msg.message.includes("part of our journey") ||
-                     msg.message.includes("heart to serve") ||
-                     (msg.message.includes("Heartist") && msg.message.includes("next steps"))
-                   ));
+            const combinedNotifications = [...roleUpdates, ...mappedNotifications, ...finalAdminNotifs]
+              .filter((n: any) => !isNotificationExpired(n.timestamp));
 
-                 if (isGetInvolved) {
-                   adminNotifs.push({
-                     id: `get_involved_${msg.id}`,
-                     supabase_id: msg.id,
-                     isInboxItem: true,
-                     type: "GET_INVOLVED",
-                     targetUrl: `/get-involved?scrollTo=my-entries&subId=${msg.post_id || ""}`,
-                     filterCategory: "Get Involved",
-                     timestamp: new Date(msg.created_at).getTime(),
-                     read: msg.is_read,
-                     content: formatNotificationMessage(msg.message),
-                     senderName: "Heartist Team"
-                   });
-                 } else if (t.includes("WARN") || t.includes("PENALTY") || t.includes("MESSAGE") || t.includes("APPEAL") || t.includes("ALERT") || t.includes("MODERATION") || t.includes("UNBLOCKED")) {
-                   let filterCategory = "Others";
-                   if (t.includes("WARN") || t.includes("MESSAGE") || t.includes("MODERATION") || t.includes("UNBLOCKED")) filterCategory = "Warnings";
-                   else if (t.includes("PENALTY")) filterCategory = "Penalties";
-                   else if (t.includes("APPEAL")) filterCategory = "Reports";
-                   else if (t.includes("ALERT")) filterCategory = "Deleted";
-                   
-                   adminNotifs.push({
-                     id: `inbox_${msg.id}`,
-                     supabase_id: msg.id,
-                     isInboxItem: true,
-                     type: msg.type,
-                     filterCategory,
-                     timestamp: new Date(msg.created_at).getTime(),
-                     read: msg.is_read,
-                     content: formatNotificationMessage(msg.message),
-                   });
-                 } else {
-                   try {
-                     const parsedNotif = JSON.parse(msg.message);
-                     const pKey = parsedNotif.id || `${parsedNotif.type}_${parsedNotif.timestamp}`;
-                     if (!seenPayloadIds.has(pKey)) {
-                       seenPayloadIds.add(pKey);
-                       parsedNotif.supabase_id = msg.id;
-                       parsedNotif.read = msg.is_read;
-                       regularNotifs.push(parsedNotif);
-                     }
-                   } catch(e) {
-                     regularNotifs.push({
-                       id: msg.id,
-                       supabase_id: msg.id,
-                       type: msg.type,
-                       timestamp: new Date(msg.created_at).getTime(),
-                       read: msg.is_read,
-                       postContent: formatNotificationMessage(msg.message),
-                     });
-                   }
-                 }
-               });
+            // 3. Final strict canonical deduplication to guarantee zero duplicate cards
+            const finalUniqueNotifications: any[] = [];
+            const finalSeenKeys = new Set<string>();
 
-                try {
-                  const localNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
-                  localNotifs.forEach((ln: any) => {
-                    if (ln && !isNotificationExpired(ln.timestamp || ln.created_at) && !regularNotifs.some((rn: any) => rn.id === ln.id || (ln.supabase_id && rn.supabase_id === ln.supabase_id))) {
-                      regularNotifs.push(ln);
-                    }
-                  });
-                } catch(e) {}
-               
-               const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
-               const myInbox = [
-                 ...(inboxData[currentUser] || []),
-                 ...(inboxData[currentUserFullName] || []),
-               ].filter((v, i, a) => a.findIndex((t: any) => t.id === v.id) === i);
-               
-               const legacyInbox = myInbox
-                 .filter((msg: any) => !isNotificationExpired(msg.timestamp))
-                 .map((msg: any) => {
-                 let filterCategory = "Others";
-                 const t = msg.type || "MESSAGE";
-                 if (t.includes("WARN")) filterCategory = "Warnings";
-                 else if (t.includes("PENALTY")) filterCategory = "Penalties";
-                 else if (t.includes("REPORT")) filterCategory = "Reports";
-                 else if (t.includes("DELETE")) filterCategory = "Deleted";
+            combinedNotifications.forEach((n: any) => {
+              let uniqueKey = "";
+              if (n.supabase_id) {
+                uniqueKey = `supa_${n.supabase_id}`;
+              } else if (n.isInboxItem) {
+                uniqueKey = `inbox_${n.id}_${n.timestamp}`;
+              } else if (n.category === "Updates" || n.type?.includes("badge") || n.type?.includes("team")) {
+                uniqueKey = `update_${n.type}_${n.badge || ""}_${n.team || ""}_${Math.floor((n.timestamp || 0) / 10000)}`;
+              } else {
+                const userStr = (n.users || []).slice().sort().join(",");
+                uniqueKey = `group_${n.type}_${n.postId || ""}_${userStr}_${Math.floor((n.timestamp || 0) / 10000)}`;
+              }
 
-                 let contentStr = formatNotificationMessage(msg.content || msg.message);
+              if (!finalSeenKeys.has(uniqueKey)) {
+                finalSeenKeys.add(uniqueKey);
+                finalUniqueNotifications.push(n);
+              }
+            });
 
-                  let tsVal = Date.now();
-                  if (typeof msg.timestamp === "number" && !isNaN(msg.timestamp)) {
-                    tsVal = msg.timestamp;
-                  } else if (typeof msg.timestamp === "string") {
-                    const parsedTs = Date.parse(msg.timestamp);
-                    if (!isNaN(parsedTs)) tsVal = parsedTs;
-                  } else if (typeof msg.id === "number" && !isNaN(msg.id) && msg.id > 100000000000) {
-                    tsVal = msg.id;
-                  }
+            setNotifications(finalUniqueNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
+        }
+     } catch (e) {
+         console.error("Failed to load inbox", e);
+     }
+  };
 
-                  return {
-                    id: `inbox_${msg.id}`,
-                    isInboxItem: true,
-                    type: msg.type,
-                    filterCategory,
-                    timestamp: tsVal,
-                    read: msg.read,
-                    content: contentStr,
-                  };
-               });
-
-               const finalAdminNotifs = [...adminNotifs, ...legacyInbox].sort((a, b) => b.timestamp - a.timestamp);
-
-               let modified = false;
-               regularNotifs.forEach((n: any) => {
-                 if (
-                   (n.type === "badge_update" ||
-                     n.type === "badge_and_team_update" ||
-                     n.type === "team_add" ||
-                     n.type === "team_remove" ||
-                     n.type === "prayer_deleted" ||
-                     n.type === "post_deleted" || n.type === "comment_deleted") &&
-                   (!n.users || n.users[0] === "Admin" || !n.users[0])
-                 ) {
-                   const adminAcc = accs.find((a: any) => a.badge === "admin" && a.firstName);
-                   const adminName = adminAcc ? adminAcc.firstName : "AdminRichford";
-                   n.users = [adminName, n.postAuthor];
-                   modified = true;
-                 }
-               });
-
-               const myNotifs = regularNotifs.filter(
-                 (n: any) =>
-                   n.supabase_id ||
-                   n.postAuthor === currentUser ||
-                   n.postAuthor === currentUserFullName ||
-                   n.postAuthor === currentUserObj?.id ||
-                   n.userId === currentUserFullName ||
-                   n.userId === currentUser ||
-                   n.userId === currentUserObj?.id ||
-                   n.recipient_id === currentUserObj?.id ||
-                   n.recipient_id === currentUser ||
-                   n.recipient_id === currentUserFullName ||
-                   n.userId === "everyone"
-               );
-
-               myNotifs.sort((a: any, b: any) => a.timestamp - b.timestamp);
-                const roleUpdates: any[] = [];
-                const regularInteractions: any[] = [];
-
-                myNotifs.forEach((n: any) => {
-                  const isRoleUpdate = 
-                    n.type === "badge_and_team_update" || 
-                    n.type === "badge_update" || 
-                    n.type === "team_add" || 
-                    n.type === "team_remove" || 
-                    n.type === "team_update" || 
-                    n.type?.includes("badge") || 
-                    n.type?.includes("team");
-
-                  if (isRoleUpdate) {
-                    roleUpdates.push({
-                      id: n.supabase_id || n.id,
-                      supabase_id: n.supabase_id,
-                      category: "Updates",
-                      type: n.type,
-                      postContent: n.postContent,
-                      postId: "profile",
-                      timestamp: n.timestamp,
-                      read: !!n.read,
-                      users: n.users && n.users.length > 0 ? n.users : [n.adminName || "Admin"],
-                      badge: n.badge,
-                      badgeLabel: n.badgeLabel || (n.badge ? getBadgeDefinition(n.badge).label : ""),
-                      badgeColor: n.badgeColor || (n.badge ? getBadgeDefinition(n.badge).color : ""),
-                      team: n.team,
-                      oldBadge: n.oldBadge,
-                      oldTeam: n.oldTeam,
-                      badgeChanged: n.badgeChanged,
-                      teamChanged: n.teamChanged,
-                      adminName: n.adminName || (n.users && n.users[0]) || "Admin",
-                    });
-                  } else {
-                    regularInteractions.push(n);
-                  }
-                });
-
-                const allGroups: any[][] = [];
-                const keyMap = new Map<string, { mainGroup: any[]; standaloneGroups: any[][]; seenUsers: Set<string> }>();
-
-                regularInteractions.forEach((n: any) => {
-                  const key = (n.postContent || "unknown_post") + "_" + (n.type || "reaction");
-                  if (!keyMap.has(key)) {
-                    keyMap.set(key, { mainGroup: [], standaloneGroups: [], seenUsers: new Set<string>() });
-                  }
-
-                  const state = keyMap.get(key)!;
-                  const user = n.fromUser || n.sourceName;
-
-                  if (user && !state.seenUsers.has(user)) {
-                    state.seenUsers.add(user);
-                    state.mainGroup.push(n);
-                  } else {
-                    state.standaloneGroups.push([n]);
-                  }
-                });
-
-                keyMap.forEach((state) => {
-                  if (state.mainGroup.length > 0) allGroups.push(state.mainGroup);
-                  state.standaloneGroups.forEach((group) => allGroups.push(group));
-                });
-
-                const mappedNotifications = allGroups.map((group) => {
-                  const recentNotif = group[group.length - 1];
-                  const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
-
-                  let category = "Interactions";
-                  if (recentNotif.type.includes("mention")) category = "Mentions";
-                  else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
-                  else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
-                  
-                  return {
-                    id: recentNotif.supabase_id || recentNotif.id,
-                    supabase_id: recentNotif.supabase_id,
-                    category: category,
-                    type: recentNotif.type || "reaction",
-                    mentionType: recentNotif.mentionType,
-                    postContent: recentNotif.postContent,
-                    postId: recentNotif.postId,
-                    timestamp: recentNotif.timestamp,
-                    read: group.every((n: any) => n.read),
-                    users: uniqueUsers,
-                  };
-                });
-
-                const combinedNotifications = [...roleUpdates, ...mappedNotifications, ...finalAdminNotifs]
-                  .filter((n: any) => !isNotificationExpired(n.timestamp));
-                setNotifications(combinedNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
-            }
-         } catch (e) {
-             console.error("Failed to load inbox", e);
-         }
-      };
-
-      fetchInbox();
-
-      // Realtime subscription for instant updates on incoming notifications
-      const notifsSub = supabase
-        .channel(`notifications_inbox_${currentUserObj.id || currentUser}`)
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "notifications",
-          },
-          () => {
-            fetchInbox();
-          }
-        )
-        .subscribe();
-
-      let webBc: any = null;
-      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
-        try {
-          webBc = new window.BroadcastChannel("heartist_notifs_sync");
-          webBc.onmessage = () => {
-            fetchInbox();
-          };
-        } catch (e) {}
+  // Debounced executor to prevent concurrent fetch storms
+  const triggerFetch = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = setTimeout(async () => {
+      if (isFetchingRef.current) {
+        pendingFetchRef.current = true;
+        return;
       }
+      isFetchingRef.current = true;
+      try {
+        await fetchInbox();
+      } finally {
+        isFetchingRef.current = false;
+        if (pendingFetchRef.current) {
+          pendingFetchRef.current = false;
+          triggerFetch();
+        }
+      }
+    }, 120);
+  };
 
-      const handleLiveEvent = () => {
-        fetchInbox();
-      };
-      window.addEventListener("storage", handleLiveEvent);
-      window.addEventListener("badge_updated", handleLiveEvent);
-      window.addEventListener("heartist_notification_event", handleLiveEvent);
+  triggerFetch();
 
-      return () => {
-        supabase.removeChannel(notifsSub);
-        window.removeEventListener("storage", handleLiveEvent);
-        window.removeEventListener("badge_updated", handleLiveEvent);
-        window.removeEventListener("heartist_notification_event", handleLiveEvent);
-        if (webBc) webBc.close();
+  // Realtime subscription for instant updates on incoming notifications
+  const notifsSub = supabase
+    .channel(`notifications_inbox_${currentUserObj.id || currentUser}`)
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "notifications",
+      },
+      () => {
+        triggerFetch();
+      }
+    )
+    .subscribe();
+
+  let webBc: any = null;
+  if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+    try {
+      webBc = new window.BroadcastChannel("heartist_notifs_sync");
+      webBc.onmessage = () => {
+        triggerFetch();
       };
+    } catch (e) {}
+  }
+
+  const handleLiveEvent = () => {
+    triggerFetch();
+  };
+  window.addEventListener("storage", handleLiveEvent);
+  window.addEventListener("badge_updated", handleLiveEvent);
+  window.addEventListener("heartist_notification_event", handleLiveEvent);
+
+  return () => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    supabase.removeChannel(notifsSub);
+    window.removeEventListener("storage", handleLiveEvent);
+    window.removeEventListener("badge_updated", handleLiveEvent);
+    window.removeEventListener("heartist_notification_event", handleLiveEvent);
+    if (webBc) webBc.close();
+  };
     }
   }, []);
 
