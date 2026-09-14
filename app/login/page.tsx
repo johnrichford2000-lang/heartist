@@ -16,16 +16,35 @@ const ROLES = [
 ];
 
 const PasswordEye = ({ show }: { show: boolean }) => (
-  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", color: show ? "var(--neon-yellow)" : "rgba(255,255,255,0.4)" }}>
+  <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center" }}>
     {show ? (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-        <circle cx="12" cy="12" r="3" />
+      <svg 
+        width="19" 
+        height="19" 
+        viewBox="0 0 24 24" 
+        fill="#FFE600" 
+        style={{ 
+          filter: "drop-shadow(0 0 5px #FFE600) drop-shadow(0 0 10px rgba(255, 230, 0, 0.75))", 
+          transition: "all 0.3s ease" 
+        }}
+      >
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
       </svg>
     ) : (
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-        <line x1="1" y1="1" x2="23" y2="23" />
+      <svg 
+        width="19" 
+        height="19" 
+        viewBox="0 0 24 24" 
+        fill="#8E8E93" 
+        style={{ 
+          filter: "drop-shadow(0 0 2px rgba(0,0,0,0.5))", 
+          transition: "all 0.3s ease" 
+        }}
+      >
+        {/* Left half with jagged crack */}
+        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09l-1.8 3.5 3.2 2-2.5 3.5 1.5 2.5L12 21.35z"/>
+        {/* Right half with jagged crack */}
+        <path d="M12.8 5.09C13.89 3.81 15.56 3 17.3 3 20.38 3 22.8 5.42 22.8 8.5c0 3.78-3.4 6.86-8.55 11.54L12.8 21.35l1.2-3.15-1.5-2.5 2.5-3.5-3.2-2 1-3.11z"/>
       </svg>
     )}
   </span>
@@ -1853,7 +1872,7 @@ export default function LoginPage() {
                   </label>
                   <input 
                     type="tel" 
-                    placeholder="09XX XXX XXXX (Optional)" 
+                    placeholder="Optional" 
                     value={regContact}
                     onChange={(e) => setRegContact(e.target.value.replace(/[^0-9+\-\s]/g, '').slice(0, 16))}
                     style={{ 
@@ -1914,7 +1933,7 @@ export default function LoginPage() {
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <label style={{ fontSize: "0.85rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)" }}>
-                    Camper Badge
+                    Select Badge
                   </label>
                   <CustomDropdown 
                     options={ROLES.map(r => ({
@@ -1939,9 +1958,9 @@ export default function LoginPage() {
                     onChange={(val) => setRegBadge(val)}
                   />
                   <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
-                    {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
-                    {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
-                    {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
+                    {regBadge === "first-timer" && "For those joining our camps or events for the very first time."}
+                    {regBadge === "camp-veteran" && "For seasoned campers who have attended past Fusion Camps."}
+                    {regBadge === "supporter" && "For parents, sponsors, or friends actively supporting the youth."}
                   </p>
                 </div>
               )}
