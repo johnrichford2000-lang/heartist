@@ -133,12 +133,14 @@ export default function NotificationListener() {
           if (x.supabase_id && payload.id && x.supabase_id === payload.id) return true;
           if (x.id && payload.supabase_id && x.id === payload.supabase_id) return true;
           
-          // Semantic match (same action from same user on same post within 10 seconds)
+          // Semantic match (same action from same user on same post, comment, reply within 10 seconds)
           const sameType = x.type === payload.type;
           const sameActor = (x.fromUser || x.sourceName) === (payload.fromUser || payload.sourceName);
           const samePost = String(x.postId || '') === String(payload.postId || '');
+          const sameComment = String(x.commentId || '') === String(payload.commentId || '');
+          const sameReply = String(x.replyId || '') === String(payload.replyId || '');
           const closeTime = Math.abs((x.timestamp || 0) - (payload.timestamp || 0)) < 10000;
-          return sameType && sameActor && samePost && closeTime;
+          return sameType && sameActor && samePost && sameComment && sameReply && closeTime;
         });
 
         if (existingIndex >= 0) {

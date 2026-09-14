@@ -329,10 +329,10 @@ export default function NotificationsPage() {
               }
             });
 
-            // 2. Group interactions by post and action type cleanly without duplicating cards
+            // 2. Group interactions by post, comment, reply, and action type cleanly without duplicating cards
             const groupMap = new Map<string, any[]>();
             dedupedInteractions.forEach((n: any) => {
-              const groupKey = `${n.postId || n.postContent || "unknown_post"}_${n.type || "reaction"}`;
+              const groupKey = `${n.postId || n.postContent || "unknown_post"}_${n.commentId || ""}_${n.replyId || ""}_${n.type || "reaction"}`;
               if (!groupMap.has(groupKey)) {
                 groupMap.set(groupKey, []);
               }
@@ -351,9 +351,9 @@ export default function NotificationsPage() {
               const uniqueUsers = Array.from(new Set(group.map((n: any) => formatCapitalizedName(n.fromUser || n.sourceName)))).filter(Boolean);
 
               let category = "Interactions";
-              if (recentNotif.type.includes("mention")) category = "Mentions";
+              if (recentNotif.type?.includes("mention")) category = "Mentions";
               else if (recentNotif.type === "pray" || recentNotif.type === "prayer_deleted") category = "Prayers";
-              else if (recentNotif.type.includes("team") || recentNotif.type.includes("badge")) category = "Updates";
+              else if (recentNotif.type?.includes("team") || recentNotif.type?.includes("badge")) category = "Updates";
               
               return {
                 id: recentNotif.supabase_id || recentNotif.id,
@@ -363,6 +363,8 @@ export default function NotificationsPage() {
                 mentionType: recentNotif.mentionType,
                 postContent: recentNotif.postContent,
                 postId: recentNotif.postId,
+                commentId: recentNotif.commentId,
+                replyId: recentNotif.replyId,
                 timestamp: recentNotif.timestamp,
                 read: group.every((n: any) => n.read),
                 users: uniqueUsers,
@@ -386,7 +388,7 @@ export default function NotificationsPage() {
                 uniqueKey = `update_${n.type}_${n.badge || ""}_${n.team || ""}_${Math.floor((n.timestamp || 0) / 10000)}`;
               } else {
                 const userStr = (n.users || []).slice().sort().join(",");
-                uniqueKey = `group_${n.type}_${n.postId || ""}_${userStr}_${Math.floor((n.timestamp || 0) / 10000)}`;
+                uniqueKey = `group_${n.type}_${n.postId || ""}_${n.commentId || ""}_${n.replyId || ""}_${userStr}_${Math.floor((n.timestamp || 0) / 10000)}`;
               }
 
               if (!finalSeenKeys.has(uniqueKey)) {
@@ -1202,22 +1204,7 @@ export default function NotificationsPage() {
                               opacity="0.6"
                             />
                           </svg>
-                        ) : notif.type === "comment" ||
-                          notif.type === "comment_reply" ||
-                          (notif.type === "mention" && notif.mentionType === "post") ? (
-                          <svg
-                            width="12"
-                            height="12"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="#60A5FA"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          >
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                        ) : notif.type === "mention" && notif.mentionType !== "post" ? (
+                        ) : notif.type?.includes("mention") ? (
                           <svg
                             width="12"
                             height="12"
@@ -1230,6 +1217,21 @@ export default function NotificationsPage() {
                           >
                             <circle cx="12" cy="12" r="4" />
                             <path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" />
+                          </svg>
+                        ) : notif.type === "comment" ||
+                          notif.type === "reply" ||
+                          notif.type === "comment_reply" ? (
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="#60A5FA"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          >
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
                           </svg>
                         ) : isRoleOrTeamUpdate ? (
                           <BadgeIcon badge="admin" size={13} />
@@ -1439,12 +1441,111 @@ export default function NotificationsPage() {
                           >
                             {actorsText}
                           </span>
-                          {notif.type === "comment" ||
-                          notif.type === "comment_reply" ? (
+                          {notif.type === "comment" ? (
                             <span style={{ opacity: 0.9 }}>
-                              {notif.type === "comment_reply"
-                                ? "replied to a comment on a post"
-                                : "commented on a post"}
+                              commented on your post
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "reply" || notif.type === "comment_reply" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              replied to your comment
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "comment_like" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to your comment
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "reply_like" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to your reply
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "mentioned_post_like" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to a post you were mentioned in
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "mentioned_comment_like" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to a comment you were mentioned in
+                              {notif.postContent && (
+                                <>
+                                  :{" "}
+                                  <span
+                                    style={{
+                                      fontStyle: "italic",
+                                      color: "var(--text-muted)",
+                                    }}
+                                  >
+                                    "{notif.postContent}"
+                                  </span>
+                                </>
+                              )}
+                            </span>
+                          ) : notif.type === "mentioned_reply_like" ? (
+                            <span style={{ opacity: 0.9 }}>
+                              reacted to a reply you were mentioned in
                               {notif.postContent && (
                                 <>
                                   :{" "}
@@ -1488,7 +1589,7 @@ export default function NotificationsPage() {
                             </span>
                           ) : notif.type.includes("mention") ? (
                             <span style={{ opacity: 0.9 }}>
-                              mentioned you in a {notif.mentionType}
+                              mentioned you in a {notif.mentionType || "comment"}
                               {notif.postContent ? (
                                 <>
                                   :{" "}
@@ -1507,7 +1608,7 @@ export default function NotificationsPage() {
                             </span>
                           ) : (
                             <span style={{ opacity: 0.9 }}>
-                              reacted to a post
+                              reacted to your post
                               {notif.postContent && (
                                 <>
                                   :{" "}

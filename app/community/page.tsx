@@ -974,42 +974,41 @@ export default function CanvasPage() {
     );
   };
 
-  const triggerMentionNotifications = (
-    contentStr: string,
-    type: "post" | "comment" | "reply",
-    sourceName: string,
-    postId: string | number,
-  ): Set<string> => {
-    const accounts = allProfiles;
+  const getMentionedUserIds = (contentStr: string): string[] => {
+    if (!contentStr) return [];
+    const accounts = allProfiles.length > 0 ? allProfiles : JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
 
     const validMentionsMap = new Map<string, string>();
     accounts.forEach((a: any) => {
       const fullName = `${a.firstName} ${a.lastName}`.trim();
+      const targetId = a.id || fullName;
       const parts = fullName.split(" ");
       for (let i = 0; i < parts.length; i++) {
         for (let j = i + 1; j <= parts.length; j++) {
           validMentionsMap.set(
             parts.slice(i, j).join(" ").toLowerCase(),
-            fullName,
+            targetId,
           );
         }
       }
+      if (a.firstName) {
+        validMentionsMap.set(a.firstName.toLowerCase(), targetId);
+      }
     });
+
+    validMentionsMap.set("everyone", "everyone");
 
     const sortedMentions = Array.from(validMentionsMap.keys()).sort(
       (a, b) => b.length - a.length,
     );
-    let notifs = JSON.parse(
-      localStorage.getItem("communityNotifications") || "[]",
-    );
-    const mentionedUsers = new Set<string>();
+    const mentioned = new Set<string>();
 
     if (sortedMentions.length > 0) {
       const escapedMentions = sortedMentions.map((name) =>
         name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
       );
       const combinedRegex = new RegExp(
-        `@\\u200B(${escapedMentions.join("|")})(?=[\\s\\.,!?]|$)`,
+        `@\\u200B?(${escapedMentions.join("|")})(?=[\\s\\.,!?]|$)`,
         "gi",
       );
 
@@ -1018,38 +1017,65 @@ export default function CanvasPage() {
         const matchedName = match[1].toLowerCase();
         const targetUserId = validMentionsMap.get(matchedName);
         if (targetUserId) {
-          mentionedUsers.add(targetUserId);
+          mentioned.add(targetUserId);
         }
       }
     }
+    return Array.from(mentioned);
+  };
 
-    mentionedUsers.forEach((userId) => {
-      if (userId && userId !== sourceName) {
-        notifs.unshift({
+  const isMatchingUser = (idOrNameA: string, idOrNameB: string) => {
+    if (!idOrNameA || !idOrNameB) return false;
+    if (String(idOrNameA).trim().toLowerCase() === String(idOrNameB).trim().toLowerCase()) return true;
+    const accounts = allProfiles.length > 0 ? allProfiles : JSON.parse(localStorage.getItem("registeredAccounts") || "[]");
+    const profA = accounts.find((p: any) => 
+      p.id === idOrNameA || 
+      p.firstName?.toLowerCase() === String(idOrNameA).toLowerCase() || 
+      `${p.firstName} ${p.lastName}`.trim().toLowerCase() === String(idOrNameA).toLowerCase()
+    );
+    const profB = accounts.find((p: any) => 
+      p.id === idOrNameB || 
+      p.firstName?.toLowerCase() === String(idOrNameB).toLowerCase() || 
+      `${p.firstName} ${p.lastName}`.trim().toLowerCase() === String(idOrNameB).toLowerCase()
+    );
+    if (profA && profB && profA.id === profB.id) return true;
+    return false;
+  };
+
+  const triggerMentionNotifications = (
+    contentStr: string,
+    type: "post" | "comment" | "reply",
+    sourceName: string,
+    postId: string | number,
+    commentId?: string | number,
+    replyId?: string | number,
+  ): Set<string> => {
+    const mentionedUserIds = getMentionedUserIds(contentStr);
+    const notifiedUsers = new Set<string>();
+
+    mentionedUserIds.forEach((targetId) => {
+      if (targetId && !isSelf(targetId)) {
+        notifiedUsers.add(targetId);
+        dispatchNotification({
           id: Date.now() + Math.random(),
           type: "mention",
-          mentionType: type === "post" ? "post" : "comment",
-          userId: userId,
+          mentionType: type,
+          userId: targetId,
+          recipient_id: targetId,
           sourceName: sourceName,
+          fromUser: sourceName,
           postId: postId,
+          commentId: commentId,
+          replyId: replyId,
           postContent: contentStr,
-          read: false,
           timestamp: Date.now(),
+          read: false,
+          message: `${sourceName} mentioned you in a ${type}`,
         });
       }
     });
 
-    localStorage.setItem("communityNotifications", JSON.stringify(notifs));
-    try {
-      if (notifs.length > 0)
-        supabase.channel("public-notifications").send({
-          type: "broadcast",
-          event: "new_notif",
-          payload: notifs[notifs.length - 1],
-        });
-    } catch (e) {}
-    window.dispatchEvent(new Event("storage"));
-    return mentionedUsers;
+    return notifiedUsers;
   };
 
   const renderWithMentions = (contentStr: string) => {
@@ -1413,9 +1439,34 @@ export default function CanvasPage() {
         fromUser: uName,
         postAuthor: p.authorId,
         postId: postId,
+        postContent: p.content,
         timestamp: Date.now(),
         read: false,
         message: `${uName} liked your post`,
+      });
+    }
+
+    if (isLiking && p.content) {
+      const mentioned = getMentionedUserIds(p.content);
+      mentioned.forEach((targetId) => {
+        if (
+          targetId &&
+          !isSelf(targetId) &&
+          !isMatchingUser(targetId, p.authorId)
+        ) {
+          dispatchNotification({
+            id: Date.now() + Math.random(),
+            type: "mentioned_post_like",
+            fromUser: uName,
+            postAuthor: targetId,
+            userId: targetId,
+            postId: postId,
+            postContent: p.content,
+            timestamp: Date.now(),
+            read: false,
+            message: `${uName} reacted to a post you were mentioned in`,
+          });
+        }
       });
     }
   };
@@ -1483,24 +1534,59 @@ export default function CanvasPage() {
     syncComment();
 
     const p = posts.find((p) => p.id === postId);
-    if (p && p.authorId && !isSelf(p.authorId) && p.authorId !== "Anonymous") {
-      const isLiking = updated
-        .find((p) => p.id === postId)
-        ?.comments?.find((c: any) => c.id === commentId)
-        ?.likes?.includes(uName);
-      if (isLiking) {
-        dispatchNotification({
-          id: Date.now(),
-          type: "comment_like",
-          fromUser: uName,
-          postAuthor: p.authorId,
-          postId: postId,
-          commentId: commentId,
-          timestamp: Date.now(),
-          read: false,
-          message: `${uName} liked your comment`,
-        });
-      }
+    const targetComment = p?.comments?.find((c: any) => c.id === commentId);
+    if (!targetComment) return;
+
+    const commentAuthorId = targetComment.authorId || targetComment.author_id || targetComment.author;
+    const isLiking = updated
+      .find((p) => p.id === postId)
+      ?.comments?.find((c: any) => c.id === commentId)
+      ?.likes?.includes(uName);
+
+    if (
+      isLiking &&
+      commentAuthorId &&
+      !isSelf(commentAuthorId) &&
+      commentAuthorId !== "Anonymous" &&
+      targetComment.author !== uName
+    ) {
+      dispatchNotification({
+        id: Date.now(),
+        type: "comment_like",
+        fromUser: uName,
+        postAuthor: commentAuthorId,
+        postId: postId,
+        commentId: commentId,
+        postContent: targetComment.content,
+        timestamp: Date.now(),
+        read: false,
+        message: `${uName} reacted to your comment`,
+      });
+    }
+
+    if (isLiking && targetComment.content) {
+      const mentioned = getMentionedUserIds(targetComment.content);
+      mentioned.forEach((targetId) => {
+        if (
+          targetId &&
+          !isSelf(targetId) &&
+          !isMatchingUser(targetId, commentAuthorId)
+        ) {
+          dispatchNotification({
+            id: Date.now() + Math.random(),
+            type: "mentioned_comment_like",
+            fromUser: uName,
+            postAuthor: targetId,
+            userId: targetId,
+            postId: postId,
+            commentId: commentId,
+            postContent: targetComment.content,
+            timestamp: Date.now(),
+            read: false,
+            message: `${uName} reacted to a comment you were mentioned in`,
+          });
+        }
+      });
     }
   };
 
@@ -1517,12 +1603,14 @@ export default function CanvasPage() {
     const uName = activeUser?.firstName || "SystemError";
     if (!uName || uName === "SystemError") return;
 
+    let targetReply: any = null;
     const updated = posts.map((p) => {
       if (p.id === postId && p.comments) {
         const newComments = p.comments.map((c: any) => {
           if (c.id === commentId && c.replies) {
             const newReplies = c.replies.map((r: any) => {
               if (r.id === replyId) {
+                targetReply = r;
                 const likes = r.likes || [];
                 if (likes.includes(uName)) {
                   return {
@@ -1551,6 +1639,81 @@ export default function CanvasPage() {
       return;
     }
     window.dispatchEvent(new Event("storage"));
+
+    const p = posts.find((p) => p.id === postId);
+    const targetComment = p?.comments?.find((c: any) => c.id === commentId);
+    const oldReply = targetComment?.replies?.find((r: any) => r.id === replyId);
+
+    const syncReply = async () => {
+      try {
+        const uuidRegex =
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        if (oldReply && activeUser?.firstName) {
+          if (uuidRegex.test(String(replyId))) {
+            await toggleReplyLike(
+              replyId.toString(),
+              oldReply.likes || [],
+              activeUser?.firstName || "",
+            );
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+    syncReply();
+
+    if (!targetReply) return;
+    const isLiking = targetReply.likes ? !targetReply.likes.includes(uName) : true;
+    const replyAuthorId = targetReply.authorId || targetReply.author_id || targetReply.author;
+
+    if (
+      isLiking &&
+      replyAuthorId &&
+      !isSelf(replyAuthorId) &&
+      replyAuthorId !== "Anonymous" &&
+      targetReply.author !== uName
+    ) {
+      dispatchNotification({
+        id: Date.now(),
+        type: "reply_like",
+        fromUser: uName,
+        postAuthor: replyAuthorId,
+        postId: postId,
+        commentId: commentId,
+        replyId: replyId,
+        postContent: targetReply.content,
+        timestamp: Date.now(),
+        read: false,
+        message: `${uName} reacted to your reply`,
+      });
+    }
+
+    if (isLiking && targetReply.content) {
+      const mentioned = getMentionedUserIds(targetReply.content);
+      mentioned.forEach((targetId) => {
+        if (
+          targetId &&
+          !isSelf(targetId) &&
+          !isMatchingUser(targetId, replyAuthorId)
+        ) {
+          dispatchNotification({
+            id: Date.now() + Math.random(),
+            type: "mentioned_reply_like",
+            fromUser: uName,
+            postAuthor: targetId,
+            userId: targetId,
+            postId: postId,
+            commentId: commentId,
+            replyId: replyId,
+            postContent: targetReply.content,
+            timestamp: Date.now(),
+            read: false,
+            message: `${uName} reacted to a reply you were mentioned in`,
+          });
+        }
+      });
+    }
   };
 
   const handleEditCommentSubmit = async (
@@ -1696,19 +1859,38 @@ export default function CanvasPage() {
       setClearCommentKey((k) => k + 1);
 
       const p = posts.find((p) => p.id === postId);
+      const postAuthorId = p?.authorId || (p as any)?.author_id;
+
+      // 1. Trigger mention notifications for anyone mentioned in the comment
+      const notifiedMentions = triggerMentionNotifications(
+        content,
+        "comment",
+        uName,
+        postId,
+        newComment.id,
+      );
+
+      // 2. Notify post author ONLY if:
+      // - Post author is not self
+      // - Post author is not Anonymous
+      // - Post author was NOT already mentioned in the comment (mention takes precedence so no duplicate notification!)
+      const isPostAuthorMentioned = postAuthorId && Array.from(notifiedMentions).some(m => isMatchingUser(m, postAuthorId));
+
       if (
         p &&
-        p.authorId &&
-        !isSelf(p.authorId) &&
-        p.authorId !== "Anonymous"
+        postAuthorId &&
+        !isSelf(postAuthorId) &&
+        postAuthorId !== "Anonymous" &&
+        !isPostAuthorMentioned
       ) {
         dispatchNotification({
           id: Date.now(),
           type: "comment",
           fromUser: uName,
-          postAuthor: p.authorId,
+          postAuthor: postAuthorId,
           postId: postId,
           commentId: newComment.id,
+          postContent: content,
           timestamp: Date.now(),
           read: false,
           message: `${uName} commented on your post`,
@@ -1779,20 +1961,40 @@ export default function CanvasPage() {
 
       const p = posts.find((p) => p.id === postId);
       const c = p?.comments?.find((c: any) => c.id === commentId);
+      const commentAuthorId = c?.authorId || (c as any)?.author_id || c?.author;
+
+      // 1. Trigger mention notifications for anyone mentioned in the reply
+      const notifiedMentions = triggerMentionNotifications(
+        content,
+        "reply",
+        uName,
+        postId,
+        commentId,
+        newReply.id,
+      );
+
+      // 2. Notify comment author ONLY if:
+      // - Comment author is not self
+      // - Comment author is not Anonymous
+      // - Comment author was NOT already mentioned in the reply (mention takes precedence!)
+      const isCommentAuthorMentioned = commentAuthorId && Array.from(notifiedMentions).some(m => isMatchingUser(m, commentAuthorId));
+
       if (
         c &&
-        c.authorId &&
-        !isSelf(c.authorId) &&
-        c.authorId !== "Anonymous"
+        commentAuthorId &&
+        !isSelf(commentAuthorId) &&
+        commentAuthorId !== "Anonymous" &&
+        !isCommentAuthorMentioned
       ) {
         dispatchNotification({
           id: Date.now(),
           type: "reply",
           fromUser: uName,
-          postAuthor: c.authorId,
+          postAuthor: commentAuthorId,
           postId: postId,
           commentId: commentId,
           replyId: newReply.id,
+          postContent: content,
           timestamp: Date.now(),
           read: false,
           message: `${uName} replied to your comment`,
