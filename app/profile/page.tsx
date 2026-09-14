@@ -110,6 +110,9 @@ export default function ProfilePage() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [deleteError, setDeleteError] = useState("");
 
+  // Invalid Birthday modal state (ages 0-5 prohibited)
+  const [showInvalidBirthdayModal, setShowInvalidBirthdayModal] = useState(false);
+
   useEffect(() => {
     let timer: any = null;
     if (showDeleteModal && deleteCountdown > 0) {
@@ -180,6 +183,7 @@ export default function ProfilePage() {
   };
 
   useEffect(() => {
+    let profileSub: any = null;
     if (typeof window !== "undefined") {
       const fetchProfile = async () => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -250,14 +254,52 @@ export default function ProfilePage() {
              } else {
                setSelectedAvatar("");
              }
-          } else if (profile.avatar_url) {
-             setSelectedAvatar(profile.avatar_url);
-          }
+           } else if (profile.avatar_url) {
+              setSelectedAvatar(profile.avatar_url);
+           }
         }
+
+        profileSub = supabase
+          .channel(`profile_realtime_${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: 'UPDATE',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${user.id}`
+            },
+            (payload: any) => {
+              const updated = payload.new;
+              if (updated) {
+                const newBadge = updated.badge || BASE_ROLES[0].id;
+                const isBase = BASE_ROLES.some(r => r.id === newBadge);
+                if (!isBase && (newBadge || "").toLowerCase() !== "admin") {
+                  setAdminAssignedBadge(newBadge);
+                } else {
+                  setAdminAssignedBadge(null);
+                }
+                setRegBadge(isAdmin ? "Admin" : newBadge);
+                setActiveUser((prev: any) => ({
+                  ...prev,
+                  badge: newBadge,
+                  team: updated.team,
+                  avatar: updated.avatar_url
+                }));
+              }
+            }
+          )
+          .subscribe();
       };
 
       fetchProfile();
     }
+
+    return () => {
+      if (profileSub) {
+        supabase.removeChannel(profileSub);
+      }
+    };
   }, []);
 
   const performSmoothScrollToBadge = useCallback(() => {
@@ -290,6 +332,12 @@ export default function ProfilePage() {
       if (activeStr) {
         try {
           const u = JSON.parse(activeStr);
+          const isBaseRole = BASE_ROLES.some(r => r.id === u.badge);
+          if (!isBaseRole && (u.badge || "").toLowerCase() !== "admin") {
+            setAdminAssignedBadge(u.badge);
+          } else {
+            setAdminAssignedBadge(null);
+          }
           setActiveUser((prev: any) => ({ ...prev, badge: u.badge }));
           setRegBadge(u.badge);
         } catch(e) {}
@@ -401,6 +449,13 @@ export default function ProfilePage() {
 
       if (!regBirthDate) {
         setError("Please select a birthday.");
+        return;
+      }
+
+      const computedAge = calculateAge(regBirthDate);
+      if (computedAge <= 5) {
+        setShowInvalidBirthdayModal(true);
+        setError("Invalid Birthday. Age must be at least 6 years old.");
         return;
       }
     }
@@ -951,11 +1006,13 @@ export default function ProfilePage() {
 
   if (!activeUser) return <div style={{ color: "white", padding: "50px", textAlign: "center" }}>Loading...</div>;
 
-  // Available Camper Badge options: Base roles + (current user's admin-assigned badge if not in base roles)
-  const availableBadgeOptions = [
-    ...BASE_ROLES,
-    ...(adminAssignedBadge ? [getRoleBadgeItem(adminAssignedBadge)] : [])
-  ];
+  // Available Camper Badge options:
+  // When an admin assigns a custom role, lock to that role. When removed/default, user can freely pick between the 3 base roles.
+  const availableBadgeOptions = adminAssignedBadge
+    ? [getRoleBadgeItem(adminAssignedBadge)]
+    : BASE_ROLES;
+
+  const isUnderageInProfile = !isAdminProfile && regBirthDate ? calculateAge(regBirthDate) <= 5 : false;
 
   return (
     <main className="main-container" style={{ padding: "80px 20px", display: "flex", flexDirection: "column", alignItems: "center", minHeight: "100vh" }}>
@@ -1212,18 +1269,52 @@ export default function ProfilePage() {
                   <label style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontFamily: "var(--font-outfit)", textAlign: "left" }}>
                     Birthday
                   </label>
-                  {regBirthDate && calculateAge(regBirthDate) > 0 && (
-                    <span style={{ fontSize: "0.72rem", color: "var(--neon-yellow)", fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                      {calculateAge(regBirthDate)} yrs old
+                  {regBirthDate && (
+                    <span style={{ 
+                      fontSize: "0.72rem", 
+                      color: isUnderageInProfile ? "#FF4D4D" : "var(--neon-yellow)", 
+                      fontWeight: "bold", 
+                      fontFamily: "var(--font-outfit)" 
+                    }}>
+                      {calculateAge(regBirthDate)} yrs old {isUnderageInProfile && "(Ages 6+ only)"}
                     </span>
                   )}
                 </div>
                 <input 
                   type="date" 
                   value={regBirthDate}
-                  onChange={(e) => setRegBirthDate(e.target.value)}
-                  style={{ width: "100%", height: "44px", minHeight: "44px", maxHeight: "44px", boxSizing: "border-box", padding: "8px 14px", borderRadius: "8px", background: "rgba(0,0,0,0.5)", border: "1px solid rgba(255,255,255,0.2)", color: "white", colorScheme: "dark", WebkitAppearance: "none", appearance: "none", outline: "none", fontFamily: "var(--font-outfit)", fontSize: "0.95rem", textAlign: "left" }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setRegBirthDate(val);
+                    if (val && calculateAge(val) <= 5) {
+                      setShowInvalidBirthdayModal(true);
+                    }
+                  }}
+                  style={{ 
+                    width: "100%", 
+                    height: "44px", 
+                    minHeight: "44px", 
+                    maxHeight: "44px", 
+                    boxSizing: "border-box", 
+                    padding: "8px 14px", 
+                    borderRadius: "8px", 
+                    background: "rgba(0,0,0,0.5)", 
+                    border: isUnderageInProfile ? "1px solid #FF4D4D" : "1px solid rgba(255,255,255,0.2)", 
+                    color: "white", 
+                    colorScheme: "dark", 
+                    WebkitAppearance: "none", 
+                    appearance: "none", 
+                    outline: "none", 
+                    fontFamily: "var(--font-outfit)", 
+                    fontSize: "0.95rem", 
+                    textAlign: "left" 
+                  }}
                 />
+                {isUnderageInProfile && (
+                  <span style={{ fontSize: "0.72rem", color: "#FF6B6B", fontFamily: "var(--font-outfit)", marginTop: "1px" }}>
+                    Invalid Birthday: Must be at least 6 years old.
+                  </span>
+                )}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: "4px", minWidth: 0, textAlign: "left" }}>
@@ -1249,7 +1340,19 @@ export default function ProfilePage() {
                   Camper Badge
                 </label>
                 {adminAssignedBadge && (
-                  <span style={{ fontSize: "0.72rem", color: "var(--neon-yellow)", fontFamily: "var(--font-outfit)" }}>
+                  <span style={{ 
+                    fontSize: "0.72rem", 
+                    color: "var(--neon-yellow)", 
+                    fontFamily: "var(--font-outfit)", 
+                    fontWeight: "600",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px"
+                  }}>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
                     Admin Assigned Role Active
                   </span>
                 )}
@@ -1274,12 +1377,23 @@ export default function ProfilePage() {
                   )
                 }))}
                 value={regBadge}
-                onChange={(val) => setRegBadge(val)}
+                onChange={(val) => {
+                  if (!adminAssignedBadge) {
+                    setRegBadge(val);
+                  }
+                }}
+                disabled={!!adminAssignedBadge}
               />
               <p style={{ fontSize: "0.75rem", color: "var(--canary-yellow)", margin: "4px 0 2px 4px", fontStyle: "italic", lineHeight: "1.3" }}>
-                {regBadge === "first-timer" && "Para sa mga unang beses pa lang sasali sa ating camps o events."}
-                {regBadge === "camp-veteran" && "Para sa mga batikan na at naka-attend na ng mga nakaraang Fusion Camps."}
-                {regBadge === "supporter" && "Para sa mga magulang, sponsors, o kaibigan na sumusuporta sa kabataan."}
+                {adminAssignedBadge ? (
+                  "This role was officially assigned by an administrator and cannot be modified."
+                ) : (
+                  <>
+                    {regBadge === "first-timer" && "For those joining our camps or events for the very first time."}
+                    {regBadge === "camp-veteran" && "For seasoned campers who have attended past Fusion Camps."}
+                    {regBadge === "supporter" && "For parents, sponsors, or friends actively supporting the youth."}
+                  </>
+                )}
               </p>
             </div>
           )}
@@ -1410,58 +1524,70 @@ export default function ProfilePage() {
 
           <button 
             type="submit"
-            disabled={isUpdating}
+            disabled={isUpdating || isUnderageInProfile}
             className="glow-text-yellow"
-            style={{ marginTop: "15px", padding: "15px", background: "rgba(255,234,0,0.1)", color: "var(--neon-yellow)", border: "1px solid var(--neon-yellow)", borderRadius: "8px", fontFamily: "var(--font-outfit)", fontWeight: "bold", fontSize: "1.1rem", cursor: isUpdating ? "wait" : "pointer", transition: "all 0.3s", opacity: isUpdating ? 0.7 : 1 }}
+            style={{ 
+              width: "100%",
+              marginTop: "15px", 
+              padding: "15px", 
+              background: isUnderageInProfile ? "rgba(255,255,255,0.05)" : "rgba(255,234,0,0.1)", 
+              color: isUnderageInProfile ? "rgba(255,255,255,0.4)" : "var(--neon-yellow)", 
+              border: isUnderageInProfile ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--neon-yellow)", 
+              borderRadius: "8px", 
+              fontFamily: "var(--font-outfit)", 
+              fontWeight: "bold", 
+              fontSize: "1.1rem", 
+              cursor: isUpdating ? "wait" : isUnderageInProfile ? "not-allowed" : "pointer", 
+              transition: "all 0.3s", 
+              opacity: isUpdating ? 0.7 : 1 
+            }}
           >
             {isUpdating ? "Saving Changes..." : "Save Changes"}
           </button>
 
-          {/* Danger Zone: Delete Account */}
-          <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
-            <button 
-              type="button"
-              onClick={() => {
-                setShowDeleteModal(true);
-                setDeleteCountdown(5);
-                setDeleteError("");
-              }}
-              style={{
-                background: "transparent",
-                color: "#EF4444",
-                border: "1px solid rgba(239, 68, 68, 0.35)",
-                borderRadius: "8px",
-                padding: "11px 20px",
-                fontFamily: "var(--font-outfit)",
-                fontSize: "0.92rem",
-                fontWeight: "600",
-                cursor: "pointer",
-                transition: "all 0.25s ease",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                width: "100%",
-                maxWidth: "280px"
-              }}
-              onMouseOver={(e) => {
-                e.currentTarget.style.background = "rgba(239, 68, 68, 0.12)";
-                e.currentTarget.style.borderColor = "#EF4444";
-                e.currentTarget.style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.25)";
-              }}
-              onMouseOut={(e) => {
-                e.currentTarget.style.background = "transparent";
-                e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.35)";
-                e.currentTarget.style.boxShadow = "none";
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18"/>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-              </svg>
-              Delete Account
-            </button>
-          </div>
+          {/* Danger Zone: Delete Account - Same size and prominence as Save Changes */}
+          <button 
+            type="button"
+            onClick={() => {
+              setShowDeleteModal(true);
+              setDeleteCountdown(5);
+              setDeleteError("");
+            }}
+            style={{
+              width: "100%",
+              marginTop: "10px",
+              padding: "15px",
+              background: "rgba(239, 68, 68, 0.1)",
+              color: "#EF4444",
+              border: "1px solid #EF4444",
+              borderRadius: "8px",
+              fontFamily: "var(--font-outfit)",
+              fontWeight: "bold",
+              fontSize: "1.1rem",
+              cursor: "pointer",
+              transition: "all 0.3s",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px"
+            }}
+            onMouseOver={(e) => {
+              e.currentTarget.style.background = "rgba(239, 68, 68, 0.2)";
+              e.currentTarget.style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.35)";
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
+              e.currentTarget.style.boxShadow = "none";
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 6h18"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <line x1="10" y1="11" x2="10" y2="17"/>
+              <line x1="14" y1="11" x2="14" y2="17"/>
+            </svg>
+            Delete Account
+          </button>
         </form>
         )}
       </div>
@@ -2375,6 +2501,127 @@ export default function ProfilePage() {
                     : "Delete Permanently"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* INVALID BIRTHDAY MODAL (Ages 0-5 Prohibited) */}
+      {showInvalidBirthdayModal && (
+        <div 
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.85)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            zIndex: 9999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px"
+          }}
+          onClick={() => setShowInvalidBirthdayModal(false)}
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              background: "#111111",
+              border: "1px solid rgba(255, 77, 77, 0.4)",
+              boxShadow: "0 0 35px rgba(255, 77, 77, 0.25), inset 0 0 15px rgba(255, 77, 77, 0.05)",
+              borderRadius: "16px",
+              padding: "28px 24px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              animation: "fadeIn 0.25s ease-out"
+            }}
+          >
+            {/* Warning Icon Badge */}
+            <div style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "50%",
+              background: "rgba(255, 77, 77, 0.12)",
+              border: "1px solid rgba(255, 77, 77, 0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "16px",
+              color: "#FF4D4D"
+            }}>
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="12" y1="8" x2="12" y2="12" />
+                <line x1="12" y1="16" x2="12.01" y2="16" />
+              </svg>
+            </div>
+
+            <h3 style={{
+              fontSize: "1.25rem",
+              fontWeight: "700",
+              color: "#FFFFFF",
+              margin: "0 0 10px 0",
+              fontFamily: "var(--font-outfit)",
+              letterSpacing: "0.3px"
+            }}>
+              Invalid Birthday
+            </h3>
+
+            <p style={{
+              fontSize: "0.92rem",
+              color: "rgba(255, 255, 255, 0.8)",
+              margin: "0 0 18px 0",
+              fontFamily: "var(--font-outfit)",
+              lineHeight: "1.55"
+            }}>
+              Heartist Portal is exclusively for participants aged 6 years old and above. Birthdays corresponding to ages 0 to 5 years old cannot be accepted.
+            </p>
+
+            <div style={{
+              background: "rgba(255, 234, 0, 0.06)",
+              border: "1px solid rgba(255, 234, 0, 0.2)",
+              borderRadius: "10px",
+              padding: "10px 14px",
+              marginBottom: "20px",
+              width: "100%"
+            }}>
+              <p style={{
+                fontSize: "0.78rem",
+                color: "var(--canary-yellow)",
+                margin: 0,
+                lineHeight: "1.4",
+                fontFamily: "var(--font-outfit)"
+              }}>
+                Please select a valid birth date to proceed with updating your profile.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setShowInvalidBirthdayModal(false)}
+              className="glow-button-yellow"
+              style={{
+                width: "100%",
+                padding: "12px",
+                background: "var(--neon-yellow)",
+                color: "#000000",
+                border: "none",
+                borderRadius: "8px",
+                fontFamily: "var(--font-outfit)",
+                fontWeight: "700",
+                fontSize: "0.95rem",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+            >
+              Understood
+            </button>
           </div>
         </div>
       )}
