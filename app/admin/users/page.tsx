@@ -200,7 +200,7 @@ export default function AdminUsersPage() {
         .eq('id', manageUser.id);
       
       if (!error) {
-        // Send unified notification if badge or team color changed
+        // Send separate notifications if badge or team color changed
         const mBadge = manageUser.badge || "first-timer";
         const mTeam = manageUser.team || "none";
         const badgeChanged = normalizeBadgeId(mBadge) !== normalizeBadgeId(editBadge);
@@ -222,69 +222,95 @@ export default function AdminUsersPage() {
           const targetUserName = formatFullName(manageUser.firstName, manageUser.lastName);
           const badgeDef = getBadgeDefinition(editBadge);
 
-          const notifItem = {
-            id: `role_update_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            type: badgeChanged && teamChanged ? "badge_and_team_update" : badgeChanged ? "badge_update" : (editTeam === "none" ? "team_remove" : "team_add"),
-            fromUser: adminName,
-            sourceName: adminName,
-            users: [adminName, targetUserName],
-            postAuthor: targetUserName,
-            postContent: badgeDef.label,
-            timestamp: Date.now(),
-            read: false,
-            postId: null,
-            userId: manageUser.id,
-            recipient_id: manageUser.id,
-            badge: editBadge,
-            badgeLabel: badgeDef.label,
-            badgeColor: badgeDef.color,
-            team: editTeam,
-            oldBadge: mBadge,
-            oldTeam: mTeam,
-            badgeChanged,
-            teamChanged,
-            adminName
-          };
+          const itemsToSend: any[] = [];
 
-          notifs.push(notifItem);
-
-          // 1. Insert into Supabase notifications table for user ID and Full Name with post_id: null (prevent uuid syntax error)
-          try {
-            const rowsToInsert: any[] = [
-              {
-                sender_id: "admin",
-                sender_name: adminName,
-                recipient_id: manageUser.id,
-                type: notifItem.type,
-                message: JSON.stringify(notifItem),
-                is_read: false,
-                post_id: null
-              }
-            ];
-            if (targetUserName && targetUserName !== manageUser.id) {
-              rowsToInsert.push({
-                sender_id: "admin",
-                sender_name: adminName,
-                recipient_id: targetUserName,
-                type: notifItem.type,
-                message: JSON.stringify(notifItem),
-                is_read: false,
-                post_id: null
-              });
-            }
-            await supabase.from('notifications').insert(rowsToInsert);
-          } catch (err) {
-            console.error("Error inserting notification", err);
+          // 1. Separate notification for role badge change (contains only badge info)
+          if (badgeChanged) {
+            itemsToSend.push({
+              id: `badge_update_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              type: "badge_update",
+              fromUser: adminName,
+              sourceName: adminName,
+              users: [adminName, targetUserName],
+              postAuthor: targetUserName,
+              postContent: badgeDef.label,
+              timestamp: Date.now(),
+              read: false,
+              postId: null,
+              userId: manageUser.id,
+              recipient_id: manageUser.id,
+              badge: editBadge,
+              badgeLabel: badgeDef.label,
+              badgeColor: badgeDef.color,
+              oldBadge: mBadge,
+              badgeChanged: true,
+              adminName
+            });
           }
 
-          // 2. Broadcast realtime event on public-notifications channel
-          try {
-            supabase.channel('public-notifications').send({
-              type: 'broadcast',
-              event: 'new_notif',
-              payload: notifItem
+          // 2. Separate notification for team color change (contains only team info)
+          if (teamChanged) {
+            itemsToSend.push({
+              id: `team_update_${Date.now() + 1}_${Math.random().toString(36).substring(2, 7)}`,
+              type: editTeam === "none" ? "team_remove" : "team_add",
+              fromUser: adminName,
+              sourceName: adminName,
+              users: [adminName, targetUserName],
+              postAuthor: targetUserName,
+              postContent: editTeam === "none" ? "None" : `Team ${editTeam}`,
+              timestamp: Date.now() + 1,
+              read: false,
+              postId: null,
+              userId: manageUser.id,
+              recipient_id: manageUser.id,
+              team: editTeam,
+              oldTeam: mTeam,
+              teamChanged: true,
+              adminName
             });
-          } catch (err) {}
+          }
+
+          for (const notifItem of itemsToSend) {
+            notifs.push(notifItem);
+
+            // 1. Insert into Supabase notifications table for user ID and Full Name with post_id: null (prevent uuid syntax error)
+            try {
+              const rowsToInsert: any[] = [
+                {
+                  sender_id: "admin",
+                  sender_name: adminName,
+                  recipient_id: manageUser.id,
+                  type: notifItem.type,
+                  message: JSON.stringify(notifItem),
+                  is_read: false,
+                  post_id: null
+                }
+              ];
+              if (targetUserName && targetUserName !== manageUser.id) {
+                rowsToInsert.push({
+                  sender_id: "admin",
+                  sender_name: adminName,
+                  recipient_id: targetUserName,
+                  type: notifItem.type,
+                  message: JSON.stringify(notifItem),
+                  is_read: false,
+                  post_id: null
+                });
+              }
+              await supabase.from('notifications').insert(rowsToInsert);
+            } catch (err) {
+              console.error("Error inserting notification", err);
+            }
+
+            // 2. Broadcast realtime event on public-notifications channel
+            try {
+              supabase.channel('public-notifications').send({
+                type: 'broadcast',
+                event: 'new_notif',
+                payload: notifItem
+              });
+            } catch (err) {}
+          }
 
           localStorage.setItem("communityNotifications", JSON.stringify(notifs));
           window.dispatchEvent(new Event("storage"));

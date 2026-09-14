@@ -561,6 +561,10 @@ export default function NotificationsPage() {
                         router.push("/profile?scrollTo=badge");
                         return;
                       }
+                      if (notif.type === "team_add" || notif.type === "team_remove" || notif.type === "team_update" || notif.type?.includes("team")) {
+                        router.push("/profile");
+                        return;
+                      }
                       if (notif.type === "GET_INVOLVED" || notif.targetUrl) {
                         router.push(notif.targetUrl || "/get-involved?scrollTo=my-entries");
                         return;
@@ -1102,111 +1106,136 @@ export default function NotificationsPage() {
                             </span>
                           </div>
 
-                          {/* Dedicated Info Box for Badge and Team */}
-                          <div
-                            style={{
-                              background: "rgba(255, 255, 255, 0.04)",
-                              border: `1px solid ${notif.badgeColor ? `${notif.badgeColor}40` : "rgba(255, 255, 255, 0.12)"}`,
-                              borderRadius: "10px",
-                              padding: "10px 14px",
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: "8px",
-                              boxShadow: notif.badgeColor ? `0 0 15px ${notif.badgeColor}15` : "none",
-                            }}
-                          >
-                            {/* Role Badge Info */}
-                            {(notif.type === "badge_and_team_update" || notif.type === "badge_update" || notif.badge || notif.type?.includes("badge")) && (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                  Role Badge:
-                                </span>
-                                {(() => {
-                                  const bDef = notif.badge ? getBadgeDefinition(notif.badge) : (notif.postContent ? getBadgeDefinition(notif.postContent) : null);
-                                  const bId = notif.badge || (bDef ? bDef.id : "Heartist");
-                                  const bColor = notif.badgeColor || (bDef ? bDef.color : "#22C55E");
-                                  const bLabel = notif.badgeLabel || (bDef ? bDef.label : (notif.postContent || "Member"));
-                                  return (
-                                    <div
-                                      style={{
-                                        display: "inline-flex",
-                                        alignItems: "center",
-                                        gap: "6px",
-                                        padding: "4px 12px",
-                                        borderRadius: "14px",
-                                        background: `${bColor}20`,
-                                        border: `1px solid ${bColor}66`,
-                                      }}
-                                    >
-                                      <BadgeIcon badge={bId} size={15} color={bColor} />
-                                      <span style={{ color: bColor, fontWeight: "bold", fontSize: "0.85rem" }}>
-                                        {bLabel}
-                                      </span>
-                                    </div>
-                                  );
-                                })()}
-                              </div>
-                            )}
+                          {/* Dedicated Info Box for Badge or Team */}
+                          {(() => {
+                            const isBadge = notif.type === "badge_and_team_update" || notif.type === "badge_update" || (Boolean(notif.badge) && !notif.type?.includes("team"));
+                            const isTeam = notif.type === "badge_and_team_update" || notif.type === "team_add" || notif.type === "team_remove" || notif.type === "team_update" || (notif.team !== undefined && notif.team !== null && !notif.type?.includes("badge"));
 
-                            {/* Team Color Info */}
-                            {(notif.type === "badge_and_team_update" || notif.type?.includes("team") || notif.team) && (
-                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
-                                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                                  Team Color:
-                                </span>
-                                {notif.team && notif.team !== "none" ? (
-                                  <div
-                                    style={{
-                                      display: "inline-flex",
-                                      alignItems: "center",
-                                      gap: "7px",
-                                      padding: "4px 12px",
-                                      borderRadius: "14px",
-                                      background: `${notif.team}22`,
-                                      border: `1px solid ${notif.team}66`,
-                                      boxShadow: `0 0 8px ${notif.team}33`,
-                                    }}
-                                  >
-                                    <span
-                                      style={{
-                                        width: "10px",
-                                        height: "10px",
-                                        borderRadius: "50%",
-                                        background: notif.team,
-                                        border: "1px solid rgba(255, 255, 255, 0.6)",
-                                        display: "inline-block",
-                                      }}
-                                    />
-                                    <span style={{ color: notif.team, fontWeight: "bold", fontSize: "0.85rem", textTransform: "capitalize" }}>
-                                      Team {notif.team}
+                            const boxBorderColor = isBadge && notif.badgeColor
+                              ? `${notif.badgeColor}40`
+                              : isTeam && notif.team && notif.team !== "none"
+                              ? `${notif.team}40`
+                              : "rgba(255, 255, 255, 0.12)";
+
+                            const boxGlowColor = isBadge && notif.badgeColor
+                              ? `0 0 15px ${notif.badgeColor}15`
+                              : isTeam && notif.team && notif.team !== "none"
+                              ? `0 0 15px ${notif.team}15`
+                              : "none";
+
+                            const accentColor = isBadge && notif.badgeColor
+                              ? notif.badgeColor
+                              : isTeam && notif.team && notif.team !== "none"
+                              ? notif.team
+                              : "var(--neon-yellow)";
+
+                            return (
+                              <div
+                                style={{
+                                  background: "rgba(255, 255, 255, 0.04)",
+                                  border: `1px solid ${boxBorderColor}`,
+                                  borderRadius: "10px",
+                                  padding: "10px 14px",
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "8px",
+                                  boxShadow: boxGlowColor,
+                                }}
+                              >
+                                {/* Role Badge Info - ONLY displayed if this notification is for badge */}
+                                {isBadge && (
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                      Role Badge:
                                     </span>
+                                    {(() => {
+                                      const bDef = notif.badge ? getBadgeDefinition(notif.badge) : (notif.postContent ? getBadgeDefinition(notif.postContent) : null);
+                                      const bId = notif.badge || (bDef ? bDef.id : "Heartist");
+                                      const bColor = notif.badgeColor || (bDef ? bDef.color : "#22C55E");
+                                      const bLabel = notif.badgeLabel || (bDef ? bDef.label : (notif.postContent || "Member"));
+                                      return (
+                                        <div
+                                          style={{
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "6px",
+                                            padding: "4px 12px",
+                                            borderRadius: "14px",
+                                            background: `${bColor}20`,
+                                            border: `1px solid ${bColor}66`,
+                                          }}
+                                        >
+                                          <BadgeIcon badge={bId} size={15} color={bColor} />
+                                          <span style={{ color: bColor, fontWeight: "bold", fontSize: "0.85rem" }}>
+                                            {bLabel}
+                                          </span>
+                                        </div>
+                                      );
+                                    })()}
                                   </div>
-                                ) : (
-                                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>
-                                    None
-                                  </span>
                                 )}
-                              </div>
-                            )}
 
-                            {/* Tap callout */}
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                marginTop: "2px",
-                                fontSize: "0.78rem",
-                                color: notif.badgeColor || "var(--neon-yellow)",
-                                fontWeight: "600",
-                              }}
-                            >
-                              <span>Tap to view in your profile</span>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <polyline points="9 18 15 12 9 6" />
-                              </svg>
-                            </div>
-                          </div>
+                                {/* Team Color Info - ONLY displayed if this notification is for team color */}
+                                {isTeam && (
+                                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "10px", flexWrap: "wrap" }}>
+                                    <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                                      Team Color:
+                                    </span>
+                                    {notif.team && notif.team !== "none" ? (
+                                      <div
+                                        style={{
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "7px",
+                                          padding: "4px 12px",
+                                          borderRadius: "14px",
+                                          background: `${notif.team}22`,
+                                          border: `1px solid ${notif.team}66`,
+                                          boxShadow: `0 0 8px ${notif.team}33`,
+                                        }}
+                                      >
+                                        <span
+                                          style={{
+                                            width: "10px",
+                                            height: "10px",
+                                            borderRadius: "50%",
+                                            background: notif.team,
+                                            border: "1px solid rgba(255, 255, 255, 0.6)",
+                                            display: "inline-block",
+                                          }}
+                                        />
+                                        <span style={{ color: notif.team, fontWeight: "bold", fontSize: "0.85rem", textTransform: "capitalize" }}>
+                                          Team {notif.team}
+                                        </span>
+                                      </div>
+                                    ) : (
+                                      <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontStyle: "italic" }}>
+                                        None
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+
+                                {/* Tap callout */}
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                    marginTop: "2px",
+                                    fontSize: "0.78rem",
+                                    color: accentColor,
+                                    fontWeight: "600",
+                                  }}
+                                >
+                                  <span>Tap to view in your profile</span>
+                                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <polyline points="9 18 15 12 9 6" />
+                                  </svg>
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div
