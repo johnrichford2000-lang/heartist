@@ -534,6 +534,24 @@ export default function ProfilePage() {
         await supabase.from("profiles").update({ middle_name: cleanMiddle }).eq("id", activeUser.id);
       } catch(e) {}
 
+      // Save user default badge to system_settings
+      if (!isAdminProfile && !adminAssignedBadge && regBadge) {
+        try {
+          const { data: currSetting } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("id", "user_default_badges")
+            .maybeSingle();
+          const currMap = (currSetting?.value && typeof currSetting.value === "object") ? currSetting.value : {};
+          currMap[activeUser.id] = regBadge;
+          await supabase.from("system_settings").upsert({
+            id: "user_default_badges",
+            value: currMap,
+            updated_at: new Date().toISOString()
+          });
+        } catch(e) {}
+      }
+
       const updatedUser = {
         ...activeUser,
         avatar: finalAvatarUrl,

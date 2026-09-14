@@ -10,6 +10,7 @@ import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 import BadgeIcon, { BadgePill, BADGE_DEFINITIONS, getBadgeDefinition, normalizeBadgeId } from "@/components/BadgeIcon";
 
 const ROLES = BADGE_DEFINITIONS;
+const BASE_BADGE_IDS = ["first-timer", "camp-veteran", "supporter"];
 
 const TEAMS = [
   "none", "green", "red", "blue", "yellow", "brown", 
@@ -18,13 +19,47 @@ const TEAMS = [
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>([]);
+  const [userDefaultBadges, setUserDefaultBadges] = useState<Record<string, string>>({});
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [copyFeedback, setCopyFeedback] = useState(false);
   const [windowOrigin, setWindowOrigin] = useState("");
 
+  const getUserDefaultBadge = (userId: string, currentBadge?: string): string => {
+    if (userDefaultBadges[userId]) {
+      return userDefaultBadges[userId];
+    }
+    const clean = normalizeBadgeId(currentBadge);
+    if (clean && BASE_BADGE_IDS.includes(clean)) {
+      return clean;
+    }
+    return "first-timer";
+  };
+
   useEffect(() => {
     if (typeof window !== "undefined") {
       setWindowOrigin(window.location.origin);
+
+      const defaultBadgesChannel = supabase
+        .channel('user_default_badges_realtime')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'system_settings',
+            filter: 'id=eq.user_default_badges'
+          },
+          (payload: any) => {
+            if (payload.new?.value && typeof payload.new.value === 'object') {
+              setUserDefaultBadges(payload.new.value);
+            }
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(defaultBadgesChannel);
+      };
     }
   }, []);
 
@@ -115,6 +150,39 @@ export default function AdminUsersPage() {
           team: p.team || "none"
         }));
         setUsers(mappedUsers);
+
+        // Fetch user default badges mapping from system_settings
+        let defaultBadgesMap: Record<string, string> = {};
+        try {
+          const { data: defaultBadgesSetting } = await supabase
+            .from('system_settings')
+            .select('value')
+            .eq('id', 'user_default_badges')
+            .maybeSingle();
+
+          if (defaultBadgesSetting?.value && typeof defaultBadgesSetting.value === 'object') {
+            defaultBadgesMap = { ...defaultBadgesSetting.value };
+          }
+        } catch(e) {}
+
+        let mapChanged = false;
+        data.forEach(p => {
+          const norm = normalizeBadgeId(p.badge);
+          if (!defaultBadgesMap[p.id] && norm && BASE_BADGE_IDS.includes(norm)) {
+            defaultBadgesMap[p.id] = norm;
+            mapChanged = true;
+          }
+        });
+        if (mapChanged) {
+          try {
+            await supabase.from('system_settings').upsert({
+              id: 'user_default_badges',
+              value: defaultBadgesMap,
+              updated_at: new Date().toISOString()
+            });
+          } catch(e) {}
+        }
+        setUserDefaultBadges(defaultBadgesMap);
       }
     } catch(e) {
       console.error("Error fetching users", e);
@@ -223,6 +291,27 @@ export default function AdminUsersPage() {
         }
 
         setUsers(users.map(u => u.id === manageUser.id ? { ...u, badge: editBadge, team: editTeam } : u));
+
+        // Update userDefaultBadges map in system_settings if needed
+        const updatedDefaultBadges = { ...userDefaultBadges };
+        const normCurrent = normalizeBadgeId(mBadge);
+        const normEdit = normalizeBadgeId(editBadge);
+
+        if (!updatedDefaultBadges[manageUser.id] && BASE_BADGE_IDS.includes(normCurrent)) {
+          updatedDefaultBadges[manageUser.id] = normCurrent;
+        }
+        if (BASE_BADGE_IDS.includes(normEdit)) {
+          updatedDefaultBadges[manageUser.id] = normEdit;
+        }
+        setUserDefaultBadges(updatedDefaultBadges);
+        try {
+          await supabase.from('system_settings').upsert({
+            id: 'user_default_badges',
+            value: updatedDefaultBadges,
+            updated_at: new Date().toISOString()
+          });
+        } catch(e) {}
+
         setManageUser(null);
         
         // Broadcast the team change globally for real-time update
@@ -1084,6 +1173,17 @@ export default function AdminUsersPage() {
                   <span style={{ fontSize: "0.72rem", color: getBadgeDefinition(editBadge).color, maxWidth: "160px", lineHeight: "1.3" }}>
                     {getBadgeDefinition(editBadge).description}
                   </span>
+                  {(() => {
+                    const targetUserDefaultBadge = getUserDefaultBadge(manageUser.id, manageUser.badge);
+                    if (normalizeBadgeId(editBadge) !== targetUserDefaultBadge) {
+                      return (
+                        <span style={{ fontSize: "0.68rem", color: "var(--neon-yellow)", fontStyle: "italic", marginTop: "2px" }}>
+                          User Default: {getBadgeDefinition(targetUserDefaultBadge).label}
+                        </span>
+                      );
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div style={{ position: "relative" }}>
                   <div 
@@ -1122,16 +1222,18 @@ export default function AdminUsersPage() {
                       overflowY: "auto",
                       boxShadow: "0 10px 30px rgba(0,0,0,0.8)"
                     }}>
-                      {/* Section: Member Badges */}
+                      {/* Section: Member Badge (Only User's Chosen Default Badge) */}
                       <div style={{ padding: "8px 12px 4px 12px", fontSize: "0.7rem", fontWeight: "bold", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)" }}>
-                        Member Badges
+                        Member Badge
                       </div>
-                      {ROLES.filter(r => r.category === "member").map(r => {
-                        const isSelected = editBadge === r.id;
+                      {(() => {
+                        const targetUserDefaultBadge = getUserDefaultBadge(manageUser.id, manageUser.badge);
+                        const defaultBadgeDef = getBadgeDefinition(targetUserDefaultBadge);
+                        const isSelected = normalizeBadgeId(editBadge) === targetUserDefaultBadge;
                         return (
                           <div 
-                            key={r.id} 
-                            onClick={() => { setEditBadge(r.id); setIsEditBadgeDropdownOpen(false); }}
+                            key={targetUserDefaultBadge} 
+                            onClick={() => { setEditBadge(targetUserDefaultBadge); setIsEditBadgeDropdownOpen(false); }}
                             style={{ 
                               padding: "10px 12px", 
                               cursor: "pointer", 
@@ -1146,20 +1248,23 @@ export default function AdminUsersPage() {
                             onMouseOver={(e) => { if (!isSelected) e.currentTarget.style.background = "rgba(255,255,255,0.07)"; }}
                             onMouseOut={(e) => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
                           >
-                            <BadgeIcon badge={r.id} size={18} color={r.color} />
+                            <BadgeIcon badge={targetUserDefaultBadge} size={18} color={defaultBadgeDef.color} />
                             <div style={{ display: "flex", flexDirection: "column" }}>
-                              <span style={{ fontSize: "0.9rem", fontWeight: isSelected ? "bold" : "normal" }}>{r.label}</span>
-                              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: "1.2" }}>{r.description.slice(0, 48)}...</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ fontSize: "0.9rem", fontWeight: isSelected ? "bold" : "normal" }}>{defaultBadgeDef.label}</span>
+                                <span style={{ fontSize: "0.65rem", padding: "1px 6px", borderRadius: "10px", background: `${defaultBadgeDef.color}25`, color: defaultBadgeDef.color, fontWeight: "600" }}>Default</span>
+                              </div>
+                              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", lineHeight: "1.2" }}>{defaultBadgeDef.description.slice(0, 48)}...</span>
                             </div>
                           </div>
                         );
-                      })}
+                      })()}
 
-                      {/* Section: Leadership & Ministry Badges */}
+                      {/* Section: Leadership & Ministry Badges (Excludes Admin) */}
                       <div style={{ padding: "8px 12px 4px 12px", fontSize: "0.7rem", fontWeight: "bold", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "1px", borderBottom: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", marginTop: "4px" }}>
                         Leadership & Ministry Badges
                       </div>
-                      {ROLES.filter(r => r.category === "leadership").map(r => {
+                      {ROLES.filter(r => r.category === "leadership" && r.id.toLowerCase() !== "admin").map(r => {
                         const isSelected = editBadge === r.id;
                         return (
                           <div 

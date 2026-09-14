@@ -329,6 +329,24 @@ export default function LoginPage() {
       if (insertError) {
         console.error("Error creating initial profile:", insertError);
       }
+
+      if (!isUserAdmin) {
+        try {
+          const { data: currSetting } = await supabase
+            .from("system_settings")
+            .select("value")
+            .eq("id", "user_default_badges")
+            .maybeSingle();
+          const currMap = (currSetting?.value && typeof currSetting.value === "object") ? currSetting.value : {};
+          currMap[user.id] = meta.badge || "first-timer";
+          await supabase.from("system_settings").upsert({
+            id: "user_default_badges",
+            value: currMap,
+            updated_at: new Date().toISOString()
+          });
+        } catch(e) {}
+      }
+
       return insertedProfile;
     }
     return profileData;
