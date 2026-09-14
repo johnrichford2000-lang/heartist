@@ -219,9 +219,14 @@ export default function LoginPage() {
   const regPassValidation = validatePasswordStrength(regPassword);
   const forgotPassValidation = validatePasswordStrength(forgotNewPassword);
 
+  // Age eligibility: Prohibit ages 0-5
+  const regComputedAge = regBirthDate ? calculateAge(regBirthDate) : 0;
+  const isAgeProhibited = regBirthDate ? regComputedAge <= 5 : false;
+
   const isRegisterDisabled = 
     isRegistering || 
     isRegisterFormIncomplete || 
+    isAgeProhibited ||
     !agreeToTerms ||
     !regPassValidation.isValid ||
     regPassword !== regConfirmPassword;
@@ -551,6 +556,12 @@ export default function LoginPage() {
     
     if (!regFirstName.trim() || !regLastName.trim() || !regBirthDate || !regEmail.trim() || !regPassword || !regConfirmPassword) {
       setError("Please fill in all required fields.");
+      return;
+    }
+
+    const computedAge = calculateAge(regBirthDate);
+    if (computedAge <= 5) {
+      setError("Registration is restricted to participants aged 6 and above. Children aged 0–5 are not eligible.");
       return;
     }
 
@@ -1832,9 +1843,14 @@ export default function LoginPage() {
                     <label style={{ fontSize: "0.8rem", color: "var(--neon-white)", fontFamily: "var(--font-outfit)", textAlign: "left" }}>
                       Birthday
                     </label>
-                    {regBirthDate && calculateAge(regBirthDate) > 0 && (
-                      <span style={{ fontSize: "0.72rem", color: "var(--neon-yellow)", fontWeight: "bold", fontFamily: "var(--font-outfit)" }}>
-                        {calculateAge(regBirthDate)} yrs old
+                    {regBirthDate && (
+                      <span style={{ 
+                        fontSize: "0.72rem", 
+                        color: isAgeProhibited ? "#FF4D4D" : "var(--neon-yellow)", 
+                        fontWeight: "bold", 
+                        fontFamily: "var(--font-outfit)" 
+                      }}>
+                        {regComputedAge} yrs old {isAgeProhibited && "(Ages 6+ only)"}
                       </span>
                     )}
                   </div>
@@ -1852,7 +1868,7 @@ export default function LoginPage() {
                       padding: "8px 14px", 
                       borderRadius: "8px", 
                       background: "rgba(0,0,0,0.5)", 
-                      border: "1px solid rgba(255,255,255,0.2)", 
+                      border: isAgeProhibited ? "1px solid #FF4D4D" : "1px solid rgba(255,255,255,0.2)", 
                       color: "white", 
                       colorScheme: "dark", 
                       WebkitAppearance: "none",
@@ -1863,6 +1879,11 @@ export default function LoginPage() {
                       textAlign: "left"
                     }}
                   />
+                  {isAgeProhibited && (
+                    <span style={{ fontSize: "0.72rem", color: "#FF6B6B", fontFamily: "var(--font-outfit)", marginTop: "1px" }}>
+                      Must be at least 6 years old to register.
+                    </span>
+                  )}
                 </div>
 
                 {/* Contact Number Field */}
@@ -2099,13 +2120,15 @@ export default function LoginPage() {
                     ? "Creating your account..."
                     : isRegisterFormIncomplete
                       ? "Paki-fill up ang lahat ng impormasyon para makapag-sign up."
-                      : !regPassValidation.isValid
-                        ? regPassValidation.errorMessage
-                        : regPassword !== regConfirmPassword
-                          ? "Hindi magkatugma ang password at confirm password."
-                          : !agreeToTerms
-                            ? "Paki-check at tanggapin ang Terms of Service & Community Guidelines bago mag-sign up."
-                            : "Sign Up & Enter"
+                      : isAgeProhibited
+                        ? "Ang registration ay para lamang sa edad 6 pataas (Ages 6+)."
+                        : !regPassValidation.isValid
+                          ? regPassValidation.errorMessage
+                          : regPassword !== regConfirmPassword
+                            ? "Hindi magkatugma ang password at confirm password."
+                            : !agreeToTerms
+                              ? "Paki-check at tanggapin ang Terms of Service & Community Guidelines bago mag-sign up."
+                              : "Sign Up & Enter"
                 }
                 style={{ 
                   marginTop: "10px", 
@@ -2258,6 +2281,15 @@ export default function LoginPage() {
                 </h4>
                 <p style={{ margin: 0, color: "var(--text-muted)" }}>
                   Safeguard your password and personal information. Respect the privacy and confidentiality of your fellow camp attendees, including their personal stories and prayer requests.
+                </p>
+              </div>
+
+              <div>
+                <h4 style={{ color: "var(--canary-yellow)", margin: "0 0 4px 0", fontSize: "0.95rem" }}>
+                  05. Age Eligibility (Ages 6 and Above)
+                </h4>
+                <p style={{ margin: 0, color: "var(--text-muted)" }}>
+                  Heartist Portal is exclusively intended for participants aged 6 years old and above. Children aged 0 to 5 years old are strictly prohibited from creating or holding an independent account to uphold community safety and privacy protection.
                 </p>
               </div>
             </div>

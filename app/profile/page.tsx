@@ -104,6 +104,24 @@ export default function ProfilePage() {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<any>(null);
 
+  // Delete Account modal state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteCountdown, setDeleteCountdown] = useState(5);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+
+  useEffect(() => {
+    let timer: any = null;
+    if (showDeleteModal && deleteCountdown > 0) {
+      timer = setInterval(() => {
+        setDeleteCountdown((prev) => (prev > 0 ? prev - 1 : 0));
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showDeleteModal, deleteCountdown]);
+
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -872,6 +890,65 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteAccount = async () => {
+    if (deleteCountdown > 0 || isDeletingAccount) return;
+    setIsDeletingAccount(true);
+    setDeleteError("");
+    try {
+      const userId = activeUser?.id;
+      const userEmail = activeUser?.email;
+
+      if (userId) {
+        try {
+          await supabase.from("notifications").delete().eq("recipient_id", userId);
+        } catch (e) {}
+
+        try {
+          await supabase.from("penalties").delete().eq("user_id", userId);
+        } catch (e) {}
+
+        try {
+          await supabase.from("profiles").delete().eq("id", userId);
+        } catch (e) {}
+
+        if (selectedAvatar && selectedAvatar.includes("avatars")) {
+          try {
+            const fileName = selectedAvatar.split("/").pop();
+            if (fileName) {
+              await supabase.storage.from("avatars").remove([fileName]);
+            }
+          } catch (e) {}
+        }
+      }
+
+      localStorage.removeItem("activeUser");
+      localStorage.removeItem("heartist_active_user");
+      if (userEmail && localStorage.getItem("heartistRememberMeEmail") === userEmail) {
+        localStorage.removeItem("heartistRememberMeEmail");
+        localStorage.removeItem("heartistRememberMe");
+      }
+
+      const savedAccounts = localStorage.getItem("registeredAccounts");
+      if (savedAccounts) {
+        try {
+          const parsed = JSON.parse(savedAccounts);
+          const updated = parsed.filter((a: any) => a.email !== userEmail && a.id !== userId);
+          localStorage.setItem("registeredAccounts", JSON.stringify(updated));
+        } catch (e) {}
+      }
+
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {}
+
+      window.location.href = "/login";
+    } catch (err: any) {
+      console.error("Delete account error:", err);
+      setDeleteError(err.message || "Failed to delete account. Please try again.");
+      setIsDeletingAccount(false);
+    }
+  };
+
   if (!activeUser) return <div style={{ color: "white", padding: "50px", textAlign: "center" }}>Loading...</div>;
 
   // Available Camper Badge options: Base roles + (current user's admin-assigned badge if not in base roles)
@@ -1339,6 +1416,52 @@ export default function ProfilePage() {
           >
             {isUpdating ? "Saving Changes..." : "Save Changes"}
           </button>
+
+          {/* Danger Zone: Delete Account */}
+          <div style={{ marginTop: "24px", paddingTop: "20px", borderTop: "1px solid rgba(255, 255, 255, 0.08)", display: "flex", flexDirection: "column", alignItems: "center", width: "100%" }}>
+            <button 
+              type="button"
+              onClick={() => {
+                setShowDeleteModal(true);
+                setDeleteCountdown(5);
+                setDeleteError("");
+              }}
+              style={{
+                background: "transparent",
+                color: "#EF4444",
+                border: "1px solid rgba(239, 68, 68, 0.35)",
+                borderRadius: "8px",
+                padding: "11px 20px",
+                fontFamily: "var(--font-outfit)",
+                fontSize: "0.92rem",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all 0.25s ease",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                width: "100%",
+                maxWidth: "280px"
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.background = "rgba(239, 68, 68, 0.12)";
+                e.currentTarget.style.borderColor = "#EF4444";
+                e.currentTarget.style.boxShadow = "0 0 15px rgba(239, 68, 68, 0.25)";
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.background = "transparent";
+                e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.35)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+              Delete Account
+            </button>
+          </div>
         </form>
         )}
       </div>
@@ -2085,6 +2208,173 @@ export default function ProfilePage() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* DELETE ACCOUNT CONFIRMATION MODAL */}
+      {showDeleteModal && (
+        <div style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: "rgba(0, 0, 0, 0.88)",
+          backdropFilter: "blur(10px)",
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px"
+        }}>
+          <div style={{
+            background: "#111111",
+            border: "1px solid rgba(239, 68, 68, 0.4)",
+            boxShadow: "0 10px 40px rgba(0, 0, 0, 0.95), 0 0 35px rgba(239, 68, 68, 0.15)",
+            borderRadius: "16px",
+            padding: "28px 24px",
+            width: "100%",
+            maxWidth: "440px",
+            textAlign: "center",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center"
+          }}>
+            {/* SVG Trash Icon - No Emojis */}
+            <div style={{
+              width: "52px",
+              height: "52px",
+              borderRadius: "14px",
+              background: "rgba(239, 68, 68, 0.12)",
+              border: "1px solid rgba(239, 68, 68, 0.35)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "16px",
+              color: "#EF4444"
+            }}>
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                <line x1="10" y1="11" x2="10" y2="17"/>
+                <line x1="14" y1="11" x2="14" y2="17"/>
+              </svg>
+            </div>
+
+            <h3 style={{
+              fontSize: "1.3rem",
+              fontWeight: "700",
+              color: "#FFFFFF",
+              margin: "0 0 8px 0",
+              fontFamily: "var(--font-outfit)"
+            }}>
+              Permanently Delete Account?
+            </h3>
+
+            <p style={{
+              fontSize: "0.95rem",
+              color: "rgba(255, 255, 255, 0.85)",
+              margin: "0 0 16px 0",
+              fontFamily: "var(--font-outfit)",
+              lineHeight: "1.5"
+            }}>
+              Are you sure you want to delete your account permanently?
+            </p>
+
+            <div style={{
+              background: "rgba(239, 68, 68, 0.08)",
+              border: "1px solid rgba(239, 68, 68, 0.22)",
+              borderRadius: "10px",
+              padding: "12px 14px",
+              marginBottom: "22px",
+              width: "100%"
+            }}>
+              <p style={{
+                fontSize: "0.82rem",
+                color: "#FCA5A5",
+                margin: 0,
+                lineHeight: "1.5",
+                fontFamily: "var(--font-outfit)"
+              }}>
+                Please note that once you delete your account, it will be automatically and permanently removed. Your profile data and access will be completely erased. This action is irreversible.
+              </p>
+            </div>
+
+            {deleteError && (
+              <p style={{
+                fontSize: "0.82rem",
+                color: "#EF4444",
+                margin: "0 0 14px 0",
+                fontFamily: "var(--font-outfit)"
+              }}>
+                {deleteError}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: "10px", width: "100%" }}>
+              <button
+                type="button"
+                disabled={isDeletingAccount}
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteCountdown(5);
+                  setDeleteError("");
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "transparent",
+                  color: "#D1D5DB",
+                  border: "1px solid rgba(255, 255, 255, 0.2)",
+                  borderRadius: "8px",
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: "600",
+                  fontSize: "0.95rem",
+                  cursor: isDeletingAccount ? "not-allowed" : "pointer",
+                  transition: "all 0.2s ease"
+                }}
+                onMouseOver={(e) => {
+                  if (!isDeletingAccount) e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)";
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.background = "transparent";
+                }}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={deleteCountdown > 0 || isDeletingAccount}
+                onClick={handleDeleteAccount}
+                style={{
+                  flex: 1.3,
+                  padding: "12px",
+                  background: deleteCountdown > 0 || isDeletingAccount ? "rgba(239, 68, 68, 0.25)" : "#DC2626",
+                  color: deleteCountdown > 0 || isDeletingAccount ? "rgba(255, 255, 255, 0.5)" : "#FFFFFF",
+                  border: deleteCountdown > 0 || isDeletingAccount ? "1px solid rgba(239, 68, 68, 0.35)" : "1px solid #DC2626",
+                  borderRadius: "8px",
+                  fontFamily: "var(--font-outfit)",
+                  fontWeight: "700",
+                  fontSize: "0.95rem",
+                  cursor: deleteCountdown > 0 || isDeletingAccount ? "not-allowed" : "pointer",
+                  transition: "all 0.25s ease",
+                  boxShadow: deleteCountdown === 0 && !isDeletingAccount ? "0 0 20px rgba(220, 38, 38, 0.55)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px"
+                }}
+              >
+                {isDeletingAccount && <span className="heartist-spinner" style={{ borderColor: "#fff", borderTopColor: "transparent" }} />}
+                {isDeletingAccount 
+                  ? "Deleting..." 
+                  : deleteCountdown > 0 
+                    ? `Delete Account (${deleteCountdown}s)` 
+                    : "Delete Permanently"}
+              </button>
+            </div>
           </div>
         </div>
       )}
