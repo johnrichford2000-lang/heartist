@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import BadgeIcon, { getBadgeDefinition } from '@/components/BadgeIcon';
+import { purgeExpiredNotifications } from '@/lib/timeAgo';
 
 export default function NotificationListener() {
   const [badgeToast, setBadgeToast] = useState<{
@@ -24,6 +25,9 @@ export default function NotificationListener() {
   }, [badgeToast]);
 
   useEffect(() => {
+    // Purge expired notifications (> 28 days) in the background
+    purgeExpiredNotifications();
+
     const handleBadgeNotification = (n: any) => {
       const activeStr = localStorage.getItem("activeUser");
       if (!activeStr) return;

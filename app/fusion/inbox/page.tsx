@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import HeartistLogo from "@/components/HeartistLogo";
 
 import { supabase } from "@/lib/supabase";
+import { formatNotificationMessage, isNotificationExpired } from "@/lib/timeAgo";
 
 export default function InboxPage() {
   const router = useRouter();
@@ -12,6 +13,11 @@ export default function InboxPage() {
   const [username, setUsername] = useState("");
   const [userId, setUserId] = useState("");
   const [filter, setFilter] = useState("All");
+
+  useEffect(() => {
+    // Automatically redirect to the unified Heartist notifications page
+    router.replace("/notifications");
+  }, [router]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -40,16 +46,17 @@ export default function InboxPage() {
           const { data, error } = await supabase.from('notifications').select('*').eq('recipient_id', activeUser.id || u).order('created_at', { ascending: false });
           
           if (!error && data) {
-                          const formatted = data.map((n: any) => {
-                 let parsedMessage = n.message;
-                 let parsedReason = '';
-                 try {
-                     const parsed = JSON.parse(n.message);
-                     if (parsed.message) {
-                         parsedMessage = parsed.message;
-                         parsedReason = parsed.reasonText || parsed.reason || '';
-                     }
-                 } catch (e) {}
+            const formatted = data
+              .filter((n: any) => !isNotificationExpired(n.created_at))
+              .map((n: any) => {
+                let parsedMessage = formatNotificationMessage(n.message);
+                let parsedReason = '';
+                try {
+                  const parsed = JSON.parse(n.message);
+                  if (parsed.reasonText || parsed.reason) {
+                    parsedReason = parsed.reasonText || parsed.reason;
+                  }
+                } catch (e) {}
                  return {
                      id: n.id,
                      type: n.type,

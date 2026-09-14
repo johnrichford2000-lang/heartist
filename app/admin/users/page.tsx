@@ -245,7 +245,8 @@ export default function AdminUsersPage() {
               badgeColor: badgeDef.color,
               oldBadge: mBadge,
               badgeChanged: true,
-              adminName
+              adminName,
+              message: `Admin assigned you the role badge: ${badgeDef.label}`
             });
           }
 
@@ -267,7 +268,8 @@ export default function AdminUsersPage() {
               team: editTeam,
               oldTeam: mTeam,
               teamChanged: true,
-              adminName
+              adminName,
+              message: editTeam === "none" ? "Admin removed your team assignment" : `Admin assigned you to Team ${editTeam}`
             });
           }
 

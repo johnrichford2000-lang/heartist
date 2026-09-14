@@ -468,7 +468,7 @@ export default function HamburgerMenu() {
                 <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }}></div>
               </div>
               <Link 
-                href="/fusion/inbox" 
+                href="/notifications" 
                 onClick={(e) => {
                   if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
                     e.preventDefault();
@@ -480,7 +480,7 @@ export default function HamburgerMenu() {
                 }} 
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}
               >
-                Inbox
+                Notifications
                 {hasUnreadMessages && (
                   <span style={{ width: "10px", height: "10px", background: "red", borderRadius: "50%", display: "inline-block" }}></span>
                 )}

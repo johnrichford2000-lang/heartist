@@ -59,9 +59,14 @@ export default function GlobalBottomNav() {
       let supabaseUnread = 0;
       let everyoneUnread = 0;
       try {
-          if (currentUserObj.id || currentUsername) {
-            const badgeClearedAt = Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0);
-            const badgeClearedIso = new Date(badgeClearedAt).toISOString();
+            const badgeClearedAt = Math.max(
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0),
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.id}`) || 0),
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.firstName}`) || 0),
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.firstName} ${currentUserObj.lastName}`.trim()) || 0)
+            );
+            const fourWeeksAgoIso = new Date(Date.now() - (28 * 24 * 60 * 60 * 1000)).toISOString();
+            const filterStampIso = badgeClearedAt > 0 ? new Date(badgeClearedAt).toISOString() : fourWeeksAgoIso;
 
             let userUuid = currentUserObj.id;
             if (!userUuid || !userUuid.includes("-")) {
@@ -86,7 +91,7 @@ export default function GlobalBottomNav() {
               .from('notifications')
               .select('id, message, type, created_at')
               .in('recipient_id', targetRecipientIds)
-              .gt('created_at', badgeClearedIso)
+              .gt('created_at', filterStampIso)
               .eq('is_read', false); // Still only count unread ones even if newer than badge clear
 
             if (unreadRows) {
@@ -115,7 +120,6 @@ export default function GlobalBottomNav() {
             if (evData) {
                everyoneUnread = evData.filter((n: any) => new Date(n.created_at).getTime() > lastSeenCanvasStamp).length;
             }
-          }
        } catch(e) {}
        
        setUnreadNotifs(supabaseUnread);

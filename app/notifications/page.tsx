@@ -6,15 +6,28 @@ import BadgeIcon, { getBadgeDefinition } from "@/components/BadgeIcon";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
+import { formatTimeAgo, isNotificationExpired, formatNotificationMessage, purgeExpiredNotifications } from "@/lib/timeAgo";
 
 export default function NotificationsPage() {
   const router = useRouter();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [isAuthorized, setIsAuthorized] = useState(false);
+  const [, setTimeTicker] = useState(0);
+
+  // Live timer interval to update relative timestamps (just now -> 1 minute ago, etc.) in real time
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTimeTicker((prev) => prev + 1);
+    }, 30000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // Background purge of notifications older than 4 weeks (28 days)
+      purgeExpiredNotifications();
+
       if (!localStorage.getItem("isHeartistLoggedIn") && !localStorage.getItem("isAdminLoggedIn")) {
         window.location.href = "/login";
         return;
@@ -98,7 +111,7 @@ export default function NotificationsPage() {
                      filterCategory: "Get Involved",
                      timestamp: new Date(msg.created_at).getTime(),
                      read: msg.is_read,
-                     content: msg.message,
+                     content: formatNotificationMessage(msg.message),
                      senderName: "Heartist Team"
                    });
                  } else if (t.includes("WARN") || t.includes("PENALTY") || t.includes("MESSAGE") || t.includes("APPEAL") || t.includes("ALERT") || t.includes("MODERATION") || t.includes("UNBLOCKED")) {
@@ -116,7 +129,7 @@ export default function NotificationsPage() {
                      filterCategory,
                      timestamp: new Date(msg.created_at).getTime(),
                      read: msg.is_read,
-                     content: msg.message,
+                     content: formatNotificationMessage(msg.message),
                    });
                  } else {
                    try {
@@ -128,14 +141,23 @@ export default function NotificationsPage() {
                        parsedNotif.read = msg.is_read;
                        regularNotifs.push(parsedNotif);
                      }
-                   } catch(e) {}
+                   } catch(e) {
+                     regularNotifs.push({
+                       id: msg.id,
+                       supabase_id: msg.id,
+                       type: msg.type,
+                       timestamp: new Date(msg.created_at).getTime(),
+                       read: msg.is_read,
+                       postContent: formatNotificationMessage(msg.message),
+                     });
+                   }
                  }
                });
 
                 try {
                   const localNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
                   localNotifs.forEach((ln: any) => {
-                    if (ln && !regularNotifs.some((rn: any) => rn.id === ln.id || (ln.supabase_id && rn.supabase_id === ln.supabase_id))) {
+                    if (ln && !isNotificationExpired(ln.timestamp || ln.created_at) && !regularNotifs.some((rn: any) => rn.id === ln.id || (ln.supabase_id && rn.supabase_id === ln.supabase_id))) {
                       regularNotifs.push(ln);
                     }
                   });
@@ -147,7 +169,9 @@ export default function NotificationsPage() {
                  ...(inboxData[currentUserFullName] || []),
                ].filter((v, i, a) => a.findIndex((t: any) => t.id === v.id) === i);
                
-               const legacyInbox = myInbox.map((msg: any) => {
+               const legacyInbox = myInbox
+                 .filter((msg: any) => !isNotificationExpired(msg.timestamp))
+                 .map((msg: any) => {
                  let filterCategory = "Others";
                  const t = msg.type || "MESSAGE";
                  if (t.includes("WARN")) filterCategory = "Warnings";
@@ -155,10 +179,7 @@ export default function NotificationsPage() {
                  else if (t.includes("REPORT")) filterCategory = "Reports";
                  else if (t.includes("DELETE")) filterCategory = "Deleted";
 
-                 let contentStr = "";
-                 if (typeof msg.content === "object")
-                   contentStr = msg.content.action || "Update on your post.";
-                 else contentStr = msg.content;
+                 let contentStr = formatNotificationMessage(msg.content || msg.message);
 
                   let tsVal = Date.now();
                   if (typeof msg.timestamp === "number" && !isNaN(msg.timestamp)) {
@@ -304,7 +325,8 @@ export default function NotificationsPage() {
                   };
                 });
 
-                const combinedNotifications = [...roleUpdates, ...mappedNotifications, ...finalAdminNotifs];
+                const combinedNotifications = [...roleUpdates, ...mappedNotifications, ...finalAdminNotifs]
+                  .filter((n: any) => !isNotificationExpired(n.timestamp));
                 setNotifications(combinedNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
             }
          } catch (e) {
@@ -356,47 +378,6 @@ export default function NotificationsPage() {
       };
     }
   }, []);
-
-  const formatTimeAgo = (timestampMs: any) => {
-    if (!timestampMs) return "just now";
-    let ts = Number(timestampMs);
-    if (isNaN(ts) || ts <= 0) {
-      if (typeof timestampMs === "string") {
-        const parsed = Date.parse(timestampMs);
-        if (!isNaN(parsed) && parsed > 0) {
-          ts = parsed;
-        } else {
-          return "just now";
-        }
-      } else {
-        return "just now";
-      }
-    }
-
-    const diff = Date.now() - ts;
-    if (diff < 60000) return "just now";
-
-    const seconds = Math.floor(diff / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    const months = Math.floor(days / 30);
-    const years = Math.floor(days / 365);
-
-    if (isNaN(years) || isNaN(days) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
-      return "just now";
-    }
-
-    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-    if (days < 28) {
-      const weeks = Math.floor(days / 7);
-      return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-    }
-    if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
-    return `${years} year${years !== 1 ? 's' : ''} ago`;
-  };
 
   const getRoleIcon = (role: string) => {
     if (!role) return null;
@@ -573,19 +554,28 @@ export default function NotificationsPage() {
             try {
               const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
               let inboxChanged = false;
-              [currentUser, currentUserFullName, currentUserId].filter(Boolean).forEach((k: string) => {
-                if (inboxData[k] && Array.isArray(inboxData[k])) {
+              for (const k in inboxData) {
+                if (Array.isArray(inboxData[k])) {
                   inboxData[k] = inboxData[k].map((m: any) => ({ ...m, read: true }));
                   inboxChanged = true;
                 }
-              });
+              }
               if (inboxChanged) {
                 localStorage.setItem("fusionInbox", JSON.stringify(inboxData));
               }
             } catch(e) {}
 
-            // 4. Update bottom nav timestamp so badge is cleared
-            localStorage.setItem(`navBadgeClearedAt_${currentUser}`, Date.now().toString());
+            // 4. Update bottom nav timestamp so badge is cleared across all name/id variants
+            const nowStamp = Date.now().toString();
+            localStorage.setItem(`navBadgeClearedAt_${currentUser}`, nowStamp);
+            localStorage.setItem(`navBadgeClearedAt_${currentUserFullName}`, nowStamp);
+            localStorage.setItem(`navBadgeClearedAt_${currentUserId}`, nowStamp);
+            if (currentUserObj.username) {
+              localStorage.setItem(`navBadgeClearedAt_${currentUserObj.username}`, nowStamp);
+            }
+            if (localStorage.getItem("isAdminLoggedIn") === "true") {
+              localStorage.setItem("navBadgeClearedAt_admin", nowStamp);
+            }
 
             // 5. Update local state and trigger global refresh
             setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
@@ -637,25 +627,21 @@ export default function NotificationsPage() {
 
                         try {
                           const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
-                          let inboxChanged = false;
-                          const rawId = notif.id.replace("inbox_", "");
-                          Object.keys(inboxData).forEach((k) => {
+                          let changed = false;
+                          for (const k in inboxData) {
                             if (Array.isArray(inboxData[k])) {
-                              inboxData[k] = inboxData[k].map((m: any) => {
-                                if (String(m.id) === rawId || `inbox_${m.id}` === notif.id) {
-                                  inboxChanged = true;
-                                  return { ...m, read: true };
-                                }
-                                return m;
-                              });
+                              inboxData[k] = inboxData[k].map((m: any) => (m.id === notif.id || `inbox_${m.id}` === notif.id) ? { ...m, read: true } : m);
+                              changed = true;
                             }
-                          });
-                          if (inboxChanged) {
+                          }
+                          if (changed) {
                             localStorage.setItem("fusionInbox", JSON.stringify(inboxData));
                           }
                         } catch(e) {}
 
-                        setNotifications((prev) => prev.map((p) => p.id === notif.id ? { ...p, read: true } : p));
+                        setNotifications((prev) =>
+                          prev.map((p) => (p.id === notif.id ? { ...p, read: true } : p))
+                        );
                         window.dispatchEvent(new Event("storage"));
                         window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: { type: "item_read", id: notif.id } }));
                       }
@@ -671,7 +657,10 @@ export default function NotificationsPage() {
                         router.push(notif.targetUrl || "/get-involved?scrollTo=my-entries");
                         return;
                       }
-                      router.push("/fusion/inbox?filter=" + notif.filterCategory);
+                      if (notif.postId) {
+                        router.push(`/community?highlight=${notif.postId}`);
+                        return;
+                      }
                     }}
                     className="card"
                     style={{
