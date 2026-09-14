@@ -696,19 +696,70 @@ export default function CanvasPage() {
     }
   }, []);
 
-  // Smooth scroll to announcement target post with top-to-bottom animation
+  // Smooth scroll to announcement target post or deep-linked comment/reply
   const hasScrolledRef = useRef(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     const params = new URLSearchParams(window.location.search);
-    const scrollId = params.get("scrollTo");
+    const scrollId = params.get("scrollTo") || params.get("highlight");
+    const commentId = params.get("commentId");
+    const replyId = params.get("replyId");
+
     if (!scrollId || posts.length === 0 || hasScrolledRef.current) return;
 
     // Switch filter to "All" if post might be in another category
     const targetPost = posts.find((p: any) => String(p.id) === String(scrollId));
     if (targetPost && filterCategory !== "All") {
       setFilterCategory("All");
+    }
+
+    if (scrollId) {
+      setHighlightId(String(scrollId));
+    }
+
+    // Direct deep-link to comment or reply
+    if (commentId || replyId) {
+      hasScrolledRef.current = true;
+      if (targetPost) {
+        setOpenCommentId(targetPost.id);
+      }
+      if (commentId && replyId) {
+        setExpandedRepliesForComment((prev) => Array.from(new Set([...prev, commentId])));
+      }
+
+      let commentAttempts = 0;
+      const commentMaxAttempts = 40;
+      const commentInterval = setInterval(() => {
+        commentAttempts++;
+        const targetElementId = replyId ? `reply-${replyId}` : `comment-${commentId}`;
+        const targetEl = document.getElementById(targetElementId);
+
+        if (targetEl) {
+          clearInterval(commentInterval);
+          targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+
+          const originalTransition = targetEl.style.transition;
+          const originalBoxShadow = targetEl.style.boxShadow;
+          const originalBorderRadius = targetEl.style.borderRadius;
+
+          targetEl.style.transition = "all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1)";
+          targetEl.style.boxShadow = "0 0 25px rgba(255, 234, 0, 0.8), inset 0 0 10px rgba(255, 234, 0, 0.3)";
+          targetEl.style.borderRadius = "12px";
+
+          setTimeout(() => {
+            targetEl.style.boxShadow = originalBoxShadow || "";
+            targetEl.style.borderRadius = originalBorderRadius || "";
+            setTimeout(() => {
+              targetEl.style.transition = originalTransition || "";
+            }, 500);
+          }, 2500);
+        } else if (commentAttempts >= commentMaxAttempts) {
+          clearInterval(commentInterval);
+        }
+      }, 100);
+
+      return () => clearInterval(commentInterval);
     }
 
     let attempts = 0;
@@ -4528,7 +4579,7 @@ return (
       {(() => {
         const modalPost =
           openCommentId !== null
-            ? posts.find((p) => p.id === openCommentId)
+            ? posts.find((p) => String(p.id) === String(openCommentId))
             : null;
         if (!modalPost) return null;
         return (
@@ -4657,6 +4708,7 @@ return (
                       return (
                         <div
                           key={comment.id}
+                          id={`comment-${comment.id}`}
                           style={{
                             display: "flex",
                             gap: "12px",
@@ -5173,6 +5225,7 @@ return (
                                         return (
                                           <div
                                             key={reply.id}
+                                            id={`reply-${reply.id}`}
                                             style={{
                                               display: "flex",
                                               gap: "10px",

@@ -19,6 +19,47 @@ export default function NotificationsPage() {
   const pendingFetchRef = useRef(false);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const [activeTab, setActiveTab] = useState<"All" | "Mentions" | "Reactions" | "Comments" | "Updates">("All");
+
+  const getNotificationTab = (n: any): "Mentions" | "Reactions" | "Comments" | "Updates" => {
+    const t = (n.type || "").toLowerCase();
+    const cat = n.category || "";
+    if (t.includes("mention") || cat === "Mentions") {
+      return "Mentions";
+    }
+    if (t.includes("comment") || t.includes("reply")) {
+      return "Comments";
+    }
+    if (
+      cat === "Updates" ||
+      t.includes("badge") ||
+      t.includes("team") ||
+      t.includes("role") ||
+      n.isInboxItem ||
+      t === "get_involved" ||
+      t.includes("warn") ||
+      t.includes("penalty") ||
+      t.includes("appeal") ||
+      t.includes("report") ||
+      t.includes("delete")
+    ) {
+      return "Updates";
+    }
+    return "Reactions";
+  };
+
+  const tabCounts = {
+    All: notifications.length,
+    Mentions: notifications.filter((n) => getNotificationTab(n) === "Mentions").length,
+    Reactions: notifications.filter((n) => getNotificationTab(n) === "Reactions").length,
+    Comments: notifications.filter((n) => getNotificationTab(n) === "Comments").length,
+    Updates: notifications.filter((n) => getNotificationTab(n) === "Updates").length,
+  };
+
+  const filteredNotifications = activeTab === "All"
+    ? notifications
+    : notifications.filter((n) => getNotificationTab(n) === activeTab);
+
   // Live timer interval to update relative timestamps (just now -> 1 minute ago, etc.) in real time
   useEffect(() => {
     const timer = setInterval(() => {
@@ -29,6 +70,23 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      // Clear badge immediately on mount so bottom nav and hamburger menu are 100% in sync
+      const auStr = localStorage.getItem("activeUser");
+      if (auStr) {
+        try {
+          const pObj = JSON.parse(auStr);
+          const nowStamp = Date.now().toString();
+          if (pObj.firstName) localStorage.setItem(`navBadgeClearedAt_${pObj.firstName}`, nowStamp);
+          if (pObj.id) localStorage.setItem(`navBadgeClearedAt_${pObj.id}`, nowStamp);
+          if (pObj.firstName && pObj.lastName) {
+            localStorage.setItem(`navBadgeClearedAt_${pObj.firstName} ${pObj.lastName}`.trim(), nowStamp);
+          }
+          if (pObj.username) localStorage.setItem(`navBadgeClearedAt_${pObj.username}`, nowStamp);
+        } catch(e) {}
+      }
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('heartist_notification_event', { detail: { type: 'nav_badge_cleared' } }));
+
       // Background purge of notifications older than 4 weeks (28 days)
       purgeExpiredNotifications();
 
@@ -397,9 +455,15 @@ export default function NotificationsPage() {
               }
             });
 
-            setNotifications(finalUniqueNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
-        }
-     } catch (e) {
+             setNotifications(finalUniqueNotifications.sort((a: any, b: any) => b.timestamp - a.timestamp));
+             const nowStamp = Date.now().toString();
+             if (currentUser) localStorage.setItem(`navBadgeClearedAt_${currentUser}`, nowStamp);
+             if (currentUserFullName) localStorage.setItem(`navBadgeClearedAt_${currentUserFullName}`, nowStamp);
+             if (currentUserObj.id) localStorage.setItem(`navBadgeClearedAt_${currentUserObj.id}`, nowStamp);
+             if (currentUserObj.username) localStorage.setItem(`navBadgeClearedAt_${currentUserObj.username}`, nowStamp);
+             window.dispatchEvent(new CustomEvent('heartist_notification_event', { detail: { type: 'nav_badge_cleared' } }));
+         }
+      } catch (e) {
          console.error("Failed to load inbox", e);
      }
   };
@@ -691,9 +755,80 @@ export default function NotificationsPage() {
         </button>
       </div>
 
+      {/* Category Filter Tabs */}
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          overflowX: "auto",
+          paddingBottom: "8px",
+          marginBottom: "16px",
+          scrollbarWidth: "none",
+          msOverflowStyle: "none",
+          WebkitOverflowScrolling: "touch",
+        }}
+      >
+        {(
+          [
+            { key: "All", label: "All" },
+            { key: "Mentions", label: "Mentions" },
+            { key: "Reactions", label: "Reactions" },
+            { key: "Comments", label: "Comments" },
+            { key: "Updates", label: "Updates" },
+          ] as const
+        ).map((tab) => {
+          const isActive = activeTab === tab.key;
+          const count = tabCounts[tab.key];
+          return (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                padding: "8px 14px",
+                borderRadius: "20px",
+                border: isActive
+                  ? "1px solid var(--neon-yellow)"
+                  : "1px solid rgba(255, 255, 255, 0.12)",
+                background: isActive
+                  ? "rgba(255, 234, 0, 0.15)"
+                  : "rgba(255, 255, 255, 0.04)",
+                color: isActive ? "var(--neon-yellow)" : "var(--text-muted)",
+                fontSize: "0.85rem",
+                fontWeight: isActive ? 600 : 400,
+                cursor: "pointer",
+                whiteSpace: "nowrap",
+                transition: "all 0.2s ease",
+                boxShadow: isActive ? "0 0 12px rgba(255, 234, 0, 0.2)" : "none",
+              }}
+            >
+              <span>{tab.label}</span>
+              <span
+                style={{
+                  padding: "1px 6px",
+                  borderRadius: "10px",
+                  fontSize: "0.72rem",
+                  fontWeight: 700,
+                  background: isActive
+                    ? "var(--neon-yellow)"
+                    : "rgba(255, 255, 255, 0.1)",
+                  color: isActive ? "#000" : "var(--neon-white)",
+                  minWidth: "16px",
+                  textAlign: "center",
+                }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <section>
         <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
-          {notifications.length === 0 ? (
+          {filteredNotifications.length === 0 ? (
             <div
               style={{
                 textAlign: "center",
@@ -701,10 +836,10 @@ export default function NotificationsPage() {
                 color: "var(--text-muted)",
               }}
             >
-              No notifications yet.
+              {activeTab === "All" ? "No notifications yet." : `No ${activeTab.toLowerCase()} yet.`}
             </div>
           ) : (
-            notifications.map((notif) => {
+            filteredNotifications.map((notif) => {
               if (notif.isInboxItem) {
                 return (
                   <div
@@ -752,7 +887,9 @@ export default function NotificationsPage() {
                         return;
                       }
                       if (notif.postId) {
-                        router.push(`/community?highlight=${notif.postId}`);
+                        const commentParam = notif.commentId ? `&commentId=${notif.commentId}` : "";
+                        const replyParam = notif.replyId ? `&replyId=${notif.replyId}` : "";
+                        router.push(`/community?highlight=${notif.postId}${commentParam}${replyParam}`);
                         return;
                       }
                     }}
@@ -1055,16 +1192,11 @@ export default function NotificationsPage() {
 
                     if (notif.type === "pray") {
                       router.push("/prayer");
-                    } else if (
-                      notif.type.includes("comment") ||
-                      notif.type.includes("reply")
-                    ) {
-                      router.push(
-                        `/community?highlight=${notif.postId}&admin=${cUser === "Admin"}`
-                      );
                     } else {
+                      const commentParam = notif.commentId ? `&commentId=${notif.commentId}` : "";
+                      const replyParam = notif.replyId ? `&replyId=${notif.replyId}` : "";
                       router.push(
-                        `/community?highlight=${notif.postId}&admin=${cUser === "Admin"}`
+                        `/community?highlight=${notif.postId}&admin=${cUser === "Admin"}${commentParam}${replyParam}`
                       );
                     }
                   }}

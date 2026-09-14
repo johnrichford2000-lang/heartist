@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import HeartistLogo from "./HeartistLogo";
@@ -10,6 +10,7 @@ import BadgeIcon, { BadgePill, getBadgeDefinition } from "@/components/BadgeIcon
 
 export default function HamburgerMenu() {
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -19,6 +20,13 @@ export default function HamburgerMenu() {
   const [adminAppealsCount, setAdminAppealsCount] = useState(0);
   const [hasUnreadAnnouncement, setHasUnreadAnnouncement] = useState(false);
   const [latestAnnId, setLatestAnnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+    if (pathname.startsWith("/notifications")) {
+      setHasUnreadMessages(false);
+    }
+  }, [pathname]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -77,20 +85,42 @@ export default function HamburgerMenu() {
                const { count: reports } = await supabase.from("reports").select("*", { count: 'exact', head: true }).eq("status", "pending");
                setAdminAppealsCount(appeals || 0);
                setAdminReportsCount(reports || 0);
-            } else if (userId || uname) {
-               // Fetch unread notifications for user across target recipient IDs
-               let pObj: any = null;
-               try { if (auStr) pObj = JSON.parse(auStr); } catch(e) {}
-               const targetIds = Array.from(new Set([
-                 userId,
-                 uname,
-                 pObj?.id,
-                 pObj?.firstName,
-                 `${pObj?.firstName || ''} ${pObj?.lastName || ''}`.trim()
-               ])).filter(Boolean);
-               const { count: unreadNotifs } = await supabase.from("notifications").select("*", { count: 'exact', head: true }).in("recipient_id", targetIds).eq("is_read", false);
-               setHasUnreadMessages((unreadNotifs || 0) > 0);
-            }
+             } else if (userId || uname) {
+                let pObj: any = null;
+                try { if (auStr) pObj = JSON.parse(auStr); } catch(e) {}
+                const targetIds = Array.from(new Set([
+                  userId,
+                  uname,
+                  pObj?.id,
+                  pObj?.firstName,
+                  `${pObj?.firstName || ''} ${pObj?.lastName || ''}`.trim(),
+                  pObj?.email?.toLowerCase()
+                ])).filter(Boolean);
+
+                if (pathnameRef.current.startsWith("/notifications")) {
+                  setHasUnreadMessages(false);
+                } else {
+                  const badgeClearedAt = Math.max(
+                    Number(localStorage.getItem(`navBadgeClearedAt_${uname}`) || 0),
+                    Number(localStorage.getItem(`navBadgeClearedAt_${userId}`) || 0),
+                    Number(localStorage.getItem(`navBadgeClearedAt_${pObj?.id}`) || 0),
+                    Number(localStorage.getItem(`navBadgeClearedAt_${pObj?.firstName}`) || 0),
+                    Number(localStorage.getItem(`navBadgeClearedAt_${pObj?.firstName} ${pObj?.lastName}`.trim()) || 0),
+                    Number(localStorage.getItem(`navBadgeClearedAt_${pObj?.username}`) || 0)
+                  );
+                  const fourWeeksAgoIso = new Date(Date.now() - (28 * 24 * 60 * 60 * 1000)).toISOString();
+                  const filterStampIso = badgeClearedAt > 0 ? new Date(badgeClearedAt).toISOString() : fourWeeksAgoIso;
+
+                  const { data: unreadRows } = await supabase
+                    .from("notifications")
+                    .select("id")
+                    .in("recipient_id", targetIds)
+                    .gt("created_at", filterStampIso)
+                    .eq("is_read", false);
+
+                  setHasUnreadMessages(Boolean(unreadRows && unreadRows.length > 0));
+                }
+             }
           } catch(e) {
             console.error("Error fetching menu counts", e);
           }
@@ -169,16 +199,24 @@ export default function HamburgerMenu() {
         })
         .subscribe();
 
+      const handleLiveEvent = (e?: any) => {
+        if (e?.detail?.type === "nav_badge_cleared" || pathnameRef.current.startsWith("/notifications")) {
+          setHasUnreadMessages(false);
+          return;
+        }
+        checkStatus();
+      };
+
       checkStatus();
-      window.addEventListener("storage", checkStatus);
+      window.addEventListener("storage", handleLiveEvent);
       window.addEventListener("announcements_updated", checkStatus);
       window.addEventListener("badge_updated", checkStatus);
-      window.addEventListener("heartist_notification_event", checkStatus);
+      window.addEventListener("heartist_notification_event", handleLiveEvent);
       return () => {
-        window.removeEventListener("storage", checkStatus);
+        window.removeEventListener("storage", handleLiveEvent);
         window.removeEventListener("announcements_updated", checkStatus);
         window.removeEventListener("badge_updated", checkStatus);
-        window.removeEventListener("heartist_notification_event", checkStatus);
+        window.removeEventListener("heartist_notification_event", handleLiveEvent);
         supabase.removeChannel(channel);
         if (webBc) webBc.close();
       };
@@ -214,7 +252,7 @@ export default function HamburgerMenu() {
   if (pathname === "/login") return null;
 
   const hasUnreadHomeAnnouncement = hasUnreadAnnouncement && (isAdmin ? pathname !== "/admin" : pathname !== "/");
-  const hasAnyNotification = isAdmin ? (adminAppealsCount > 0 || adminReportsCount > 0 || hasUnreadHomeAnnouncement) : (hasUnreadMessages || hasUnreadHomeAnnouncement);
+  const hasAnyNotification = isAdmin ? (adminAppealsCount > 0 || adminReportsCount > 0) : hasUnreadMessages;
 
   return (
     <>
@@ -476,6 +514,19 @@ export default function HamburgerMenu() {
                     window.location.href = "/login";
                     return;
                   }
+                  const nowStamp = Date.now().toString();
+                  const auStr = localStorage.getItem("activeUser");
+                  if (auStr) {
+                    try {
+                      const pObj = JSON.parse(auStr);
+                      if (pObj.firstName) localStorage.setItem(`navBadgeClearedAt_${pObj.firstName}`, nowStamp);
+                      if (pObj.id) localStorage.setItem(`navBadgeClearedAt_${pObj.id}`, nowStamp);
+                      if (pObj.firstName && pObj.lastName) localStorage.setItem(`navBadgeClearedAt_${pObj.firstName} ${pObj.lastName}`.trim(), nowStamp);
+                    } catch(e) {}
+                  }
+                  setHasUnreadMessages(false);
+                  window.dispatchEvent(new Event('storage'));
+                  window.dispatchEvent(new CustomEvent('heartist_notification_event', { detail: { type: 'nav_badge_cleared' } }));
                   setIsOpen(false);
                 }} 
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}

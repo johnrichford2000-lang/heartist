@@ -8,11 +8,33 @@ import { fetchAnnouncements, fetchSystemSetting } from "@/lib/fusionSync";
 
 export default function GlobalBottomNav() {
   const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [unreadNotifs, setUnreadNotifs] = useState(0);
   const [canvasUnreadNotifs, setCanvasUnreadNotifs] = useState(0);
   const [hasUnreadAnnouncement, setHasUnreadAnnouncement] = useState(false);
   const [latestAnnId, setLatestAnnId] = useState<string | null>(null);
+
+  useEffect(() => {
+    pathnameRef.current = pathname;
+    if (pathname.startsWith("/notifications")) {
+      setUnreadNotifs(0);
+      const activeUserStr = localStorage.getItem("activeUser");
+      if (activeUserStr) {
+        try {
+          const currentUserObj = JSON.parse(activeUserStr);
+          const nowStamp = Date.now().toString();
+          localStorage.setItem(`navBadgeClearedAt_${currentUserObj.firstName}`, nowStamp);
+          localStorage.setItem(`navBadgeClearedAt_${currentUserObj.id}`, nowStamp);
+          if (currentUserObj.firstName && currentUserObj.lastName) {
+            localStorage.setItem(`navBadgeClearedAt_${currentUserObj.firstName} ${currentUserObj.lastName}`.trim(), nowStamp);
+          }
+        } catch(e) {}
+      }
+      window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('heartist_notification_event', { detail: { type: 'nav_badge_cleared' } }));
+    }
+  }, [pathname]);
 
   useEffect(() => {
     const checkNotifs = async () => {
@@ -58,12 +80,18 @@ export default function GlobalBottomNav() {
       
       let supabaseUnread = 0;
       let everyoneUnread = 0;
+
+      if (pathnameRef.current.startsWith("/notifications")) {
+        setUnreadNotifs(0);
+        return;
+      }
       try {
             const badgeClearedAt = Math.max(
               Number(localStorage.getItem(`navBadgeClearedAt_${currentUsername}`) || 0),
               Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.id}`) || 0),
               Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.firstName}`) || 0),
-              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.firstName} ${currentUserObj.lastName}`.trim()) || 0)
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.firstName} ${currentUserObj.lastName}`.trim()) || 0),
+              Number(localStorage.getItem(`navBadgeClearedAt_${currentUserObj.username}`) || 0)
             );
             const fourWeeksAgoIso = new Date(Date.now() - (28 * 24 * 60 * 60 * 1000)).toISOString();
             const filterStampIso = badgeClearedAt > 0 ? new Date(badgeClearedAt).toISOString() : fourWeeksAgoIso;
@@ -157,19 +185,27 @@ export default function GlobalBottomNav() {
       })
       .subscribe();
 
+    const handleLiveEvent = (e?: any) => {
+      if (e?.detail?.type === "nav_badge_cleared" || pathnameRef.current.startsWith("/notifications")) {
+        setUnreadNotifs(0);
+        return;
+      }
+      checkNotifs();
+    };
+
     checkNotifs();
     const pollInterval = setInterval(checkNotifs, 30000);
-    window.addEventListener('storage', checkNotifs);
+    window.addEventListener('storage', handleLiveEvent);
     window.addEventListener('announcements_updated', checkNotifs);
     window.addEventListener('badge_updated', checkNotifs);
-    window.addEventListener('heartist_notification_event', checkNotifs);
+    window.addEventListener('heartist_notification_event', handleLiveEvent);
 
     return () => {
       clearInterval(pollInterval);
-      window.removeEventListener('storage', checkNotifs);
+      window.removeEventListener('storage', handleLiveEvent);
       window.removeEventListener('announcements_updated', checkNotifs);
       window.removeEventListener('badge_updated', checkNotifs);
-      window.removeEventListener('heartist_notification_event', checkNotifs);
+      window.removeEventListener('heartist_notification_event', handleLiveEvent);
       supabase.removeChannel(channel);
       if (webBc) webBc.close();
     };
@@ -326,12 +362,19 @@ export default function GlobalBottomNav() {
             }
             const activeUserStr = localStorage.getItem("activeUser");
             if (activeUserStr) {
-               const currentUserObj = JSON.parse(activeUserStr);
-               const currentUsername = currentUserObj.firstName;
-               localStorage.setItem(`navBadgeClearedAt_${currentUsername}`, Date.now().toString());
-               setUnreadNotifs(0);
-               window.dispatchEvent(new Event('storage'));
+               try {
+                 const currentUserObj = JSON.parse(activeUserStr);
+                 const nowStamp = Date.now().toString();
+                 localStorage.setItem(`navBadgeClearedAt_${currentUserObj.firstName}`, nowStamp);
+                 localStorage.setItem(`navBadgeClearedAt_${currentUserObj.id}`, nowStamp);
+                 if (currentUserObj.firstName && currentUserObj.lastName) {
+                   localStorage.setItem(`navBadgeClearedAt_${currentUserObj.firstName} ${currentUserObj.lastName}`.trim(), nowStamp);
+                 }
+               } catch(e) {}
             }
+            setUnreadNotifs(0);
+            window.dispatchEvent(new Event('storage'));
+            window.dispatchEvent(new CustomEvent('heartist_notification_event', { detail: { type: 'nav_badge_cleared' } }));
           }} 
           className="responsive-nav-item" 
           style={{ textDecoration: "none" }}
