@@ -133,8 +133,9 @@ export default function GlobalBottomNav() {
       } catch (e) {}
     }
 
-    // 2. Canonical Supabase Realtime channel 'public-notifications'
-    const channel = supabase.channel('public-notifications')
+    // 2. Unique Supabase Realtime channel
+    const channelId = `global_bottom_nav_${Math.random().toString(36).substring(2, 9)}`;
+    const channel = supabase.channel(channelId)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
         checkNotifs();
       })

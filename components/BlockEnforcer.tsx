@@ -31,7 +31,7 @@ export default function BlockEnforcer() {
         const localBlocks = JSON.parse(localStorage.getItem("communityBlockedUsers") || "[]");
         let isBlocked = false;
         
-        if (localBlocks.includes(uid) || localBlocks.includes(fname)) {
+        if ((uid && localBlocks.includes(uid)) || (fname && localBlocks.includes(fname))) {
           isBlocked = true;
         }
 

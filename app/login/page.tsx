@@ -394,7 +394,7 @@ export default function LoginPage() {
     
     // Also check local storage blocks just in case
     const localBlocks = JSON.parse(localStorage.getItem("communityBlockedUsers") || "[]");
-    if (localBlocks.includes(profileData.id) || localBlocks.includes(profileData.first_name)) {
+    if ((profileData.id && localBlocks.includes(profileData.id)) || (profileData.first_name && localBlocks.includes(profileData.first_name))) {
       setError("Your account has been blocked from posting on the Canvas due to repeated violations.");
       await supabase.auth.signOut();
       return;

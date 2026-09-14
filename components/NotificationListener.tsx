@@ -79,15 +79,24 @@ export default function NotificationListener() {
         const current = JSON.parse(localStorage.getItem('communityNotifications') || '[]');
         
         // Check if this is a block notification for the active user
-        if (n.type && (n.type.toUpperCase() === "BLOCK" || n.type.toUpperCase().includes("BLOCK"))) {
+        if (n.type && (n.type.toUpperCase() === "BLOCK" || n.type.toUpperCase() === "BLOCKED")) {
+          if (typeof window !== "undefined" && (window.location.pathname === "/login" || window.location.pathname === "/banned")) return;
           const activeStr = localStorage.getItem("activeUser");
-          if (activeStr) {
+          if (activeStr && n.recipient_id) {
             const pUser = JSON.parse(activeStr);
-            const isBlockedUser = 
-              pUser.id === n.recipient_id || 
-              pUser.firstName === n.recipient_id || 
-              `${pUser.firstName} ${pUser.lastName}`.trim() === n.recipient_id ||
-              pUser.username === n.recipient_id;
+            const rId = String(n.recipient_id).trim().toLowerCase();
+            const uId = String(pUser.id || "").trim().toLowerCase();
+            const uFirst = String(pUser.firstName || "").trim().toLowerCase();
+            const uFull = String(pUser.fullName || `${pUser.firstName || ""} ${pUser.lastName || ""}`).trim().toLowerCase();
+            const uName = String(pUser.username || "").trim().toLowerCase();
+
+            const isBlockedUser = Boolean(
+              (uId && uId === rId) ||
+              (uFirst && uFirst === rId) ||
+              (uFull && uFull === rId) ||
+              (uName && uName === rId)
+            );
+
             if (isBlockedUser) {
               localStorage.removeItem("isHeartistLoggedIn");
               localStorage.removeItem("isAdminLoggedIn");

@@ -140,8 +140,9 @@ export default function HamburgerMenu() {
         } catch (e) {}
       }
 
-      // 2. Canonical Supabase Realtime channel 'public-notifications'
-      const channel = supabase.channel('public-notifications')
+      // 2. Unique Supabase Realtime channel
+      const channelId = `hamburgermenu_realtime_${Math.random().toString(36).substring(2, 9)}`;
+      const channel = supabase.channel(channelId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
           checkStatus();
         })
@@ -182,7 +183,14 @@ export default function HamburgerMenu() {
         if (webBc) webBc.close();
       };
     }
-  }, [isOpen, pathname]); // Re-check when menu opens or route changes
+  }, []); // Run once on mount
+
+  // Re-check status when menu opens or route changes
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("storage"));
+    }
+  }, [isOpen, pathname]);
 
   // Prevent background scrolling when menu is open
   useEffect(() => {

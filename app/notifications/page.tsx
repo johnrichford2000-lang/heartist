@@ -340,13 +340,6 @@ export default function NotificationsPage() {
         } catch (e) {}
       }
 
-      const broadcastSub = supabase
-        .channel("public-notifications")
-        .on("broadcast", { event: "new_notif" }, () => {
-          fetchInbox();
-        })
-        .subscribe();
-
       const handleLiveEvent = () => {
         fetchInbox();
       };
@@ -356,7 +349,6 @@ export default function NotificationsPage() {
 
       return () => {
         supabase.removeChannel(notifsSub);
-        supabase.removeChannel(broadcastSub);
         window.removeEventListener("storage", handleLiveEvent);
         window.removeEventListener("badge_updated", handleLiveEvent);
         window.removeEventListener("heartist_notification_event", handleLiveEvent);
