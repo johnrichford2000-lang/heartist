@@ -77,9 +77,18 @@ export default function HamburgerMenu() {
                const { count: reports } = await supabase.from("reports").select("*", { count: 'exact', head: true }).eq("status", "pending");
                setAdminAppealsCount(appeals || 0);
                setAdminReportsCount(reports || 0);
-            } else if (userId) {
-               // Fetch unread notifications for user
-               const { count: unreadNotifs } = await supabase.from("notifications").select("*", { count: 'exact', head: true }).eq("recipient_id", userId).eq("is_read", false);
+            } else if (userId || uname) {
+               // Fetch unread notifications for user across target recipient IDs
+               let pObj: any = null;
+               try { if (auStr) pObj = JSON.parse(auStr); } catch(e) {}
+               const targetIds = Array.from(new Set([
+                 userId,
+                 uname,
+                 pObj?.id,
+                 pObj?.firstName,
+                 `${pObj?.firstName || ''} ${pObj?.lastName || ''}`.trim()
+               ])).filter(Boolean);
+               const { count: unreadNotifs } = await supabase.from("notifications").select("*", { count: 'exact', head: true }).in("recipient_id", targetIds).eq("is_read", false);
                setHasUnreadMessages((unreadNotifs || 0) > 0);
             }
           } catch(e) {
@@ -120,8 +129,19 @@ export default function HamburgerMenu() {
           }
       };
 
-      const channelId = `hamburgermenu_realtime_${Math.random().toString(36).substring(2, 9)}`;
-      const channel = supabase.channel(channelId)
+      // 1. Web BroadcastChannel for same-browser instant sync (0ms)
+      let webBc: any = null;
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        try {
+          webBc = new window.BroadcastChannel("heartist_notifs_sync");
+          webBc.onmessage = () => {
+            checkStatus();
+          };
+        } catch (e) {}
+      }
+
+      // 2. Canonical Supabase Realtime channel 'public-notifications'
+      const channel = supabase.channel('public-notifications')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
           checkStatus();
         })
@@ -143,7 +163,7 @@ export default function HamburgerMenu() {
         .on('broadcast', { event: 'announcement_updated' }, () => {
           checkStatus();
         })
-        .on('broadcast', { event: 'badge_updated' }, () => {
+        .on('broadcast', { event: 'new_notif' }, () => {
           checkStatus();
         })
         .subscribe();
@@ -152,11 +172,14 @@ export default function HamburgerMenu() {
       window.addEventListener("storage", checkStatus);
       window.addEventListener("announcements_updated", checkStatus);
       window.addEventListener("badge_updated", checkStatus);
+      window.addEventListener("heartist_notification_event", checkStatus);
       return () => {
         window.removeEventListener("storage", checkStatus);
         window.removeEventListener("announcements_updated", checkStatus);
         window.removeEventListener("badge_updated", checkStatus);
+        window.removeEventListener("heartist_notification_event", checkStatus);
         supabase.removeChannel(channel);
+        if (webBc) webBc.close();
       };
     }
   }, [isOpen, pathname]); // Re-check when menu opens or route changes

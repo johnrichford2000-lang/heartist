@@ -82,13 +82,27 @@ export default function GlobalBottomNav() {
               currentUserObj.email?.toLowerCase()
             ])).filter(Boolean);
 
-            const { count } = await supabase
+            const { data: unreadRows } = await supabase
               .from('notifications')
-              .select('*', { count: 'exact', head: true })
+              .select('id, message, type, created_at')
               .in('recipient_id', targetRecipientIds)
               .gt('created_at', badgeClearedIso)
               .eq('is_read', false); // Still only count unread ones even if newer than badge clear
-            if (count !== null) supabaseUnread = count;
+
+            if (unreadRows) {
+              const seenUnreadKeys = new Set<string>();
+              unreadRows.forEach((r: any) => {
+                let key = r.id;
+                try {
+                  if (r.message && typeof r.message === "string") {
+                    const parsed = JSON.parse(r.message);
+                    if (parsed.id) key = parsed.id;
+                  }
+                } catch (e) {}
+                seenUnreadKeys.add(key);
+              });
+              supabaseUnread = seenUnreadKeys.size;
+            }
             
             // Fetch @everyone mentions to check against canvas
             const lastSeenCanvasStamp = Number(localStorage.getItem(`lastSeenCanvas_${currentUsername}`) || 0);
@@ -108,8 +122,19 @@ export default function GlobalBottomNav() {
        setCanvasUnreadNotifs(everyoneUnread);
     };
 
-    const channelId = `nav_realtime_${Math.random().toString(36).substring(2, 9)}`;
-    const channel = supabase.channel(channelId)
+    // 1. Web BroadcastChannel for same-browser instant sync (0ms)
+    let webBc: any = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        webBc = new window.BroadcastChannel("heartist_notifs_sync");
+        webBc.onmessage = () => {
+          checkNotifs();
+        };
+      } catch (e) {}
+    }
+
+    // 2. Canonical Supabase Realtime channel 'public-notifications'
+    const channel = supabase.channel('public-notifications')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'announcements' }, () => {
         checkNotifs();
       })
@@ -128,14 +153,20 @@ export default function GlobalBottomNav() {
       .subscribe();
 
     checkNotifs();
+    const pollInterval = setInterval(checkNotifs, 30000);
     window.addEventListener('storage', checkNotifs);
     window.addEventListener('announcements_updated', checkNotifs);
     window.addEventListener('badge_updated', checkNotifs);
+    window.addEventListener('heartist_notification_event', checkNotifs);
+
     return () => {
+      clearInterval(pollInterval);
       window.removeEventListener('storage', checkNotifs);
       window.removeEventListener('announcements_updated', checkNotifs);
       window.removeEventListener('badge_updated', checkNotifs);
+      window.removeEventListener('heartist_notification_event', checkNotifs);
       supabase.removeChannel(channel);
+      if (webBc) webBc.close();
     };
   }, []);
 

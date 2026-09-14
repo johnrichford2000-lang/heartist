@@ -73,52 +73,80 @@ export default function NotificationListener() {
       }
     };
 
-    const channelId = `realtime_notifs_listener_${Math.random().toString(36).substring(2, 9)}`;
-    const channel = supabase.channel(channelId)
-      .on('broadcast', { event: 'new_notif' }, (payload) => {
-        try {
-          const n = payload.payload;
-          const current = JSON.parse(localStorage.getItem('communityNotifications') || '[]');
-          
-          // Check if this is a block notification for the active user
-          if (n.type && n.type.toUpperCase() === "BLOCK") {
-            const activeStr = localStorage.getItem("activeUser");
-            if (activeStr) {
-              const pUser = JSON.parse(activeStr);
-              if (pUser.id === n.recipient_id || pUser.firstName === n.recipient_id) {
-                localStorage.removeItem("isHeartistLoggedIn");
-                localStorage.removeItem("isAdminLoggedIn");
-                localStorage.removeItem("activeUser");
-                supabase.auth.signOut().then(() => {
-                  window.location.href = "/login?blocked=true";
-                });
-                return;
-              }
+    const processIncomingNotification = (n: any) => {
+      if (!n) return;
+      try {
+        const current = JSON.parse(localStorage.getItem('communityNotifications') || '[]');
+        
+        // Check if this is a block notification for the active user
+        if (n.type && (n.type.toUpperCase() === "BLOCK" || n.type.toUpperCase().includes("BLOCK"))) {
+          const activeStr = localStorage.getItem("activeUser");
+          if (activeStr) {
+            const pUser = JSON.parse(activeStr);
+            const isBlockedUser = 
+              pUser.id === n.recipient_id || 
+              pUser.firstName === n.recipient_id || 
+              `${pUser.firstName} ${pUser.lastName}`.trim() === n.recipient_id ||
+              pUser.username === n.recipient_id;
+            if (isBlockedUser) {
+              localStorage.removeItem("isHeartistLoggedIn");
+              localStorage.removeItem("isAdminLoggedIn");
+              localStorage.removeItem("activeUser");
+              supabase.auth.signOut().then(() => {
+                window.location.href = "/login?blocked=true";
+              });
+              return;
             }
           }
-
-          // Check if this is a badge or team update for the active user
-          if (n.type === "badge_update" || n.type === "badge_and_team_update" || n.type?.includes("badge") || n.type?.includes("team")) {
-            handleBadgeNotification(n);
-          }
-          
-          if (!current.find((x: any) => x.id === n.id)) {
-            current.push(n);
-            localStorage.setItem('communityNotifications', JSON.stringify(current));
-            window.dispatchEvent(new Event("storage"));
-          }
-        } catch (e) {
-            console.error("Broadcast notification error", e);
         }
+
+        // Check if this is a badge or team update for the active user
+        if (n.type === "badge_update" || n.type === "badge_and_team_update" || n.type?.includes("badge") || n.type?.includes("team")) {
+          handleBadgeNotification(n);
+        }
+        
+        if (n.id && !current.find((x: any) => x.id === n.id)) {
+          current.push(n);
+          localStorage.setItem('communityNotifications', JSON.stringify(current));
+        }
+
+        // Wake up bottom nav and all listeners immediately in realtime
+        window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: n }));
+        window.dispatchEvent(new Event("storage"));
+      } catch (e) {
+        console.error("Broadcast notification error", e);
+      }
+    };
+
+    // 1. Web BroadcastChannel for same-browser instant sync (0ms)
+    let webBc: any = null;
+    if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+      try {
+        webBc = new window.BroadcastChannel("heartist_notifs_sync");
+        webBc.onmessage = (ev: MessageEvent) => {
+          processIncomingNotification(ev.data);
+        };
+      } catch (e) {}
+    }
+
+    // 2. Canonical Supabase Realtime channel 'public-notifications'
+    const channel = supabase.channel('public-notifications')
+      .on('broadcast', { event: 'new_notif' }, (payload) => {
+        processIncomingNotification(payload.payload);
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' }, (payload) => {
         try {
           const newRow = payload.new;
-          if (newRow && (newRow.type === "badge_update" || newRow.type === "badge_and_team_update" || newRow.type?.includes("badge") || newRow.type?.includes("team")) && newRow.message) {
-            try {
-              const parsed = JSON.parse(newRow.message);
-              handleBadgeNotification(parsed);
-            } catch(e) {}
+          if (newRow) {
+            let parsed = newRow;
+            if (newRow.message && typeof newRow.message === 'string') {
+              try {
+                parsed = { ...JSON.parse(newRow.message), supabase_id: newRow.id, recipient_id: newRow.recipient_id };
+              } catch (e) {
+                parsed = newRow;
+              }
+            }
+            processIncomingNotification(parsed);
           }
         } catch(e) {}
       })
@@ -142,6 +170,7 @@ export default function NotificationListener() {
 
     return () => {
       supabase.removeChannel(channel);
+      if (webBc) webBc.close();
     };
   }, []);
 

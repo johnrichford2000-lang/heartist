@@ -160,15 +160,25 @@ export default function NotificationsPage() {
                    contentStr = msg.content.action || "Update on your post.";
                  else contentStr = msg.content;
 
-                 return {
-                   id: `inbox_${msg.id}`,
-                   isInboxItem: true,
-                   type: msg.type,
-                   filterCategory,
-                   timestamp: msg.id,
-                   read: msg.read,
-                   content: contentStr,
-                 };
+                  let tsVal = Date.now();
+                  if (typeof msg.timestamp === "number" && !isNaN(msg.timestamp)) {
+                    tsVal = msg.timestamp;
+                  } else if (typeof msg.timestamp === "string") {
+                    const parsedTs = Date.parse(msg.timestamp);
+                    if (!isNaN(parsedTs)) tsVal = parsedTs;
+                  } else if (typeof msg.id === "number" && !isNaN(msg.id) && msg.id > 100000000000) {
+                    tsVal = msg.id;
+                  }
+
+                  return {
+                    id: `inbox_${msg.id}`,
+                    isInboxItem: true,
+                    type: msg.type,
+                    filterCategory,
+                    timestamp: tsVal,
+                    read: msg.read,
+                    content: contentStr,
+                  };
                });
 
                const finalAdminNotifs = [...adminNotifs, ...legacyInbox].sort((a, b) => b.timestamp - a.timestamp);
@@ -320,6 +330,16 @@ export default function NotificationsPage() {
         )
         .subscribe();
 
+      let webBc: any = null;
+      if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+        try {
+          webBc = new window.BroadcastChannel("heartist_notifs_sync");
+          webBc.onmessage = () => {
+            fetchInbox();
+          };
+        } catch (e) {}
+      }
+
       const broadcastSub = supabase
         .channel("public-notifications")
         .on("broadcast", { event: "new_notif" }, () => {
@@ -332,35 +352,59 @@ export default function NotificationsPage() {
       };
       window.addEventListener("storage", handleLiveEvent);
       window.addEventListener("badge_updated", handleLiveEvent);
+      window.addEventListener("heartist_notification_event", handleLiveEvent);
 
       return () => {
         supabase.removeChannel(notifsSub);
         supabase.removeChannel(broadcastSub);
         window.removeEventListener("storage", handleLiveEvent);
         window.removeEventListener("badge_updated", handleLiveEvent);
+        window.removeEventListener("heartist_notification_event", handleLiveEvent);
+        if (webBc) webBc.close();
       };
     }
   }, []);
-  const formatTimeAgo = (timestampMs: number) => {
-  if (!timestampMs) return "";
-  const seconds = Math.floor((Date.now() - timestampMs) / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-  const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
 
-  if (seconds < 60) return "just now";
-  if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
-  if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
-  if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
-  if (days < 28) {
-    const weeks = Math.floor(days / 7);
-    return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
-  }
-  if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
-  return `${years} year${years !== 1 ? 's' : ''} ago`;
-};
+  const formatTimeAgo = (timestampMs: any) => {
+    if (!timestampMs) return "just now";
+    let ts = Number(timestampMs);
+    if (isNaN(ts) || ts <= 0) {
+      if (typeof timestampMs === "string") {
+        const parsed = Date.parse(timestampMs);
+        if (!isNaN(parsed) && parsed > 0) {
+          ts = parsed;
+        } else {
+          return "just now";
+        }
+      } else {
+        return "just now";
+      }
+    }
+
+    const diff = Date.now() - ts;
+    if (diff < 60000) return "just now";
+
+    const seconds = Math.floor(diff / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    const months = Math.floor(days / 30);
+    const years = Math.floor(days / 365);
+
+    if (isNaN(years) || isNaN(days) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+      return "just now";
+    }
+
+    if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
+    if (days < 28) {
+      const weeks = Math.floor(days / 7);
+      return `${weeks} week${weeks !== 1 ? 's' : ''} ago`;
+    }
+    if (months < 12) return `${months} month${months !== 1 ? 's' : ''} ago`;
+    return `${years} year${years !== 1 ? 's' : ''} ago`;
+  };
 
   const getRoleIcon = (role: string) => {
     if (!role) return null;
@@ -477,14 +521,39 @@ export default function NotificationsPage() {
           Delete All
         </button>
         <button
-          onClick={() => {
+          onClick={async () => {
             const activeUserStr = localStorage.getItem("activeUser");
             if (!activeUserStr) return;
             const currentUserObj = JSON.parse(activeUserStr);
             const currentUser = currentUserObj.firstName;
             const currentUserFullName =
               `${currentUserObj.firstName} ${currentUserObj.lastName}`.trim();
+            const currentUserId = currentUserObj.id;
 
+            // 1. Mark in Supabase across all recipient keys for this user
+            const targetIds = Array.from(new Set([
+              currentUserId,
+              currentUser,
+              currentUserFullName,
+              currentUser?.toLowerCase(),
+              currentUserFullName?.toLowerCase(),
+              currentUserObj.email?.toLowerCase(),
+            ])).filter(Boolean);
+
+            try {
+              const { markAllNotificationsRead } = await import("@/lib/notificationsSync");
+              await markAllNotificationsRead(targetIds);
+            } catch (e) {
+              try {
+                await supabase
+                  .from("notifications")
+                  .update({ is_read: true })
+                  .in("recipient_id", targetIds)
+                  .eq("is_read", false);
+              } catch(err) {}
+            }
+
+            // 2. Mark all communityNotifications in localStorage
             const allNotifs = JSON.parse(
               localStorage.getItem("communityNotifications") || "[]",
             );
@@ -493,7 +562,11 @@ export default function NotificationsPage() {
                 n.postAuthor === currentUser ||
                 n.postAuthor === currentUserFullName ||
                 n.userId === currentUserFullName ||
-                n.userId === currentUser;
+                n.userId === currentUser ||
+                n.userId === currentUserId ||
+                n.recipient_id === currentUserId ||
+                n.recipient_id === currentUser ||
+                n.recipient_id === currentUserFullName;
               if (isTargetUser) {
                 return { ...n, read: true };
               }
@@ -503,15 +576,29 @@ export default function NotificationsPage() {
               "communityNotifications",
               JSON.stringify(updatedNotifs),
             );
-            window.dispatchEvent(new Event("storage"));
-            const displayedSupaIds2 = notifications.filter((n: any) => n.supabase_id && !n.read).map((n: any) => n.supabase_id);
-            if (displayedSupaIds2.length > 0) {
-              const updateSupa = async () => {
-                try { await supabase.from('notifications').update({ is_read: true }).in('id', displayedSupaIds2); } catch(e){}
-              };
-              updateSupa();
-            }
+
+            // 3. Mark all fusionInbox in localStorage
+            try {
+              const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
+              let inboxChanged = false;
+              [currentUser, currentUserFullName, currentUserId].filter(Boolean).forEach((k: string) => {
+                if (inboxData[k] && Array.isArray(inboxData[k])) {
+                  inboxData[k] = inboxData[k].map((m: any) => ({ ...m, read: true }));
+                  inboxChanged = true;
+                }
+              });
+              if (inboxChanged) {
+                localStorage.setItem("fusionInbox", JSON.stringify(inboxData));
+              }
+            } catch(e) {}
+
+            // 4. Update bottom nav timestamp so badge is cleared
+            localStorage.setItem(`navBadgeClearedAt_${currentUser}`, Date.now().toString());
+
+            // 5. Update local state and trigger global refresh
             setNotifications((prev) => prev.map((p) => ({ ...p, read: true })));
+            window.dispatchEvent(new Event("storage"));
+            window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: { type: "mark_all_read" } }));
           }}
           style={{
             flex: 1,
@@ -553,9 +640,32 @@ export default function NotificationsPage() {
                           await markNotificationRead(notif.supabase_id);
                         }
                         const allNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
-                        const updated = allNotifs.map((n: any) => n.id === notif.id ? { ...n, read: true } : n);
+                        const updated = allNotifs.map((n: any) => (n.id === notif.id || `inbox_${n.id}` === notif.id) ? { ...n, read: true } : n);
                         localStorage.setItem("communityNotifications", JSON.stringify(updated));
+
+                        try {
+                          const inboxData = JSON.parse(localStorage.getItem("fusionInbox") || "{}");
+                          let inboxChanged = false;
+                          const rawId = notif.id.replace("inbox_", "");
+                          Object.keys(inboxData).forEach((k) => {
+                            if (Array.isArray(inboxData[k])) {
+                              inboxData[k] = inboxData[k].map((m: any) => {
+                                if (String(m.id) === rawId || `inbox_${m.id}` === notif.id) {
+                                  inboxChanged = true;
+                                  return { ...m, read: true };
+                                }
+                                return m;
+                              });
+                            }
+                          });
+                          if (inboxChanged) {
+                            localStorage.setItem("fusionInbox", JSON.stringify(inboxData));
+                          }
+                        } catch(e) {}
+
+                        setNotifications((prev) => prev.map((p) => p.id === notif.id ? { ...p, read: true } : p));
                         window.dispatchEvent(new Event("storage"));
+                        window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: { type: "item_read", id: notif.id } }));
                       }
                       if (notif.type === "badge_update" || notif.type?.includes("badge")) {
                         router.push("/profile?scrollTo=badge");
@@ -849,10 +959,12 @@ export default function NotificationsPage() {
                       }
                       const allNotifs = JSON.parse(localStorage.getItem("communityNotifications") || "[]");
                       const updated = allNotifs.map((n: any) => 
-                        (n.postId === notif.postId && (n.type === notif.type || notif.type.includes(n.type))) ? { ...n, read: true } : n
+                        (n.id === notif.id || (n.postId && n.postId === notif.postId && (n.type === notif.type || notif.type.includes(n.type)))) ? { ...n, read: true } : n
                       );
                       localStorage.setItem("communityNotifications", JSON.stringify(updated));
+                      setNotifications((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
                       window.dispatchEvent(new Event("storage"));
+                      window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: { type: "item_read", id: notif.id } }));
                     }
 
                     if (notif.type === "GET_INVOLVED" || notif.type === "get_involved_response") {

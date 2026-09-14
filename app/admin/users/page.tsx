@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import HeartistLogo from "@/components/HeartistLogo";
 import AdminBottomNav from "@/components/AdminBottomNav";
 import { supabase } from "@/lib/supabase";
+import { broadcastNotification } from "@/lib/notificationsSync";
 import { formatCapitalizedName, formatFullName } from "@/utils/formatName";
 import BadgeIcon, { BadgePill, BADGE_DEFINITIONS, getBadgeDefinition, normalizeBadgeId } from "@/components/BadgeIcon";
 
@@ -273,42 +274,26 @@ export default function AdminUsersPage() {
           for (const notifItem of itemsToSend) {
             notifs.push(notifItem);
 
-            // 1. Insert into Supabase notifications table for user ID and Full Name with post_id: null (prevent uuid syntax error)
+            // 1. Insert single row into Supabase notifications table for recipient
             try {
-              const rowsToInsert: any[] = [
+              await supabase.from('notifications').insert([
                 {
                   sender_id: "admin",
                   sender_name: adminName,
-                  recipient_id: manageUser.id,
+                  recipient_id: manageUser.id || targetUserName,
                   type: notifItem.type,
                   message: JSON.stringify(notifItem),
                   is_read: false,
                   post_id: null
                 }
-              ];
-              if (targetUserName && targetUserName !== manageUser.id) {
-                rowsToInsert.push({
-                  sender_id: "admin",
-                  sender_name: adminName,
-                  recipient_id: targetUserName,
-                  type: notifItem.type,
-                  message: JSON.stringify(notifItem),
-                  is_read: false,
-                  post_id: null
-                });
-              }
-              await supabase.from('notifications').insert(rowsToInsert);
+              ]);
             } catch (err) {
               console.error("Error inserting notification", err);
             }
 
-            // 2. Broadcast realtime event on public-notifications channel
+            // 2. Realtime broadcast across devices and local tabs
             try {
-              supabase.channel('public-notifications').send({
-                type: 'broadcast',
-                event: 'new_notif',
-                payload: notifItem
-              });
+              broadcastNotification(notifItem);
             } catch (err) {}
           }
 

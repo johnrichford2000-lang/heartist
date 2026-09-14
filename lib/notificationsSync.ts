@@ -1,14 +1,62 @@
 import { supabase } from "./supabase";
 
-const broadcastChannel = supabase.channel('public-notifications');
-broadcastChannel.subscribe();
+// Shared Supabase Realtime channel for notifications
+let supabaseRealtimeChannel: any = null;
+const getSupabaseBroadcastChannel = () => {
+  if (!supabaseRealtimeChannel) {
+    supabaseRealtimeChannel = supabase.channel('public-notifications');
+    supabaseRealtimeChannel.subscribe();
+  }
+  return supabaseRealtimeChannel;
+};
+
+// Web BroadcastChannel for instant, zero-latency same-browser sync
+let webBroadcastChannel: any = null;
+if (typeof window !== "undefined" && "BroadcastChannel" in window) {
+  try {
+    webBroadcastChannel = new window.BroadcastChannel("heartist_notifs_sync");
+  } catch (e) {
+    console.error("BroadcastChannel error:", e);
+  }
+}
+
+/**
+ * Broadcasts a notification across tabs (Web BroadcastChannel), across devices (Supabase),
+ * and inside the current window (CustomEvent & storage).
+ */
+export const broadcastNotification = (payload: any) => {
+  // 1. Instant local window event
+  if (typeof window !== "undefined") {
+    try {
+      window.dispatchEvent(new CustomEvent("heartist_notification_event", { detail: payload }));
+      window.dispatchEvent(new Event("storage"));
+    } catch (e) {}
+  }
+
+  // 2. Inter-tab same browser sync (0ms latency)
+  if (webBroadcastChannel) {
+    try {
+      webBroadcastChannel.postMessage(payload);
+    } catch (e) {}
+  }
+
+  // 3. Supabase Realtime Broadcast across devices
+  try {
+    const chan = getSupabaseBroadcastChannel();
+    chan.send({
+      type: 'broadcast',
+      event: 'new_notif',
+      payload: payload
+    });
+  } catch (e) {}
+};
 
 export interface Notification {
   id: string;
   sender_id: string;
   sender_name: string;
   recipient_id: string;
-  type: string; // 'message', 'alert', 'penalty', 'appeal'
+  type: string; // 'message', 'alert', 'penalty', 'appeal', etc.
   message: string;
   is_read: boolean;
   post_id?: string;
@@ -43,9 +91,7 @@ export const createNotification = async (notif: Omit<Notification, "id" | "creat
   const insertedNotif = data[0] as Notification;
   
   // Broadcast for real-time UI updates
-  try {
-     broadcastChannel.send({ type: 'broadcast', event: 'new_notif', payload: insertedNotif });
-  } catch(e) {}
+  broadcastNotification(insertedNotif);
   
   return insertedNotif;
 };
@@ -58,17 +104,25 @@ export const markNotificationRead = async (id: string) => {
   
   if (error) {
     console.error("Error marking notification read:", error);
+  } else {
+    broadcastNotification({ type: 'notification_read', id });
   }
 };
 
-export const markAllNotificationsRead = async (userId: string) => {
+export const markAllNotificationsRead = async (userIdOrIds: string | string[]) => {
+  const ids = Array.isArray(userIdOrIds) ? userIdOrIds : [userIdOrIds];
+  if (ids.length === 0) return;
+
   const { error } = await supabase
     .from("notifications")
     .update({ is_read: true })
-    .eq("recipient_id", userId);
+    .in("recipient_id", ids)
+    .eq("is_read", false);
   
   if (error) {
     console.error("Error marking all read:", error);
+  } else {
+    broadcastNotification({ type: 'mark_all_read', recipient_ids: ids });
   }
 };
 
@@ -80,6 +134,8 @@ export const deleteNotification = async (id: string) => {
   
   if (error) {
     console.error("Error deleting notification:", error);
+  } else {
+    broadcastNotification({ type: 'notification_deleted', id });
   }
 };
 
@@ -87,8 +143,8 @@ export const deleteNotification = async (id: string) => {
 export const dispatchNotification = async (notifLocal: any) => {
   const recipient_id = notifLocal.userId || notifLocal.postAuthor || "everyone";
   const type = notifLocal.type || "MESSAGE";
-  const sender_name = notifLocal.sourceName || "System";
-  const sender_id = notifLocal.senderId || "system";
+  const sender_name = notifLocal.sourceName || notifLocal.fromUser || "System";
+  const sender_id = notifLocal.senderId || notifLocal.fromUser || "system";
   const message = JSON.stringify(notifLocal);
 
   const dbNotif = {
@@ -107,10 +163,8 @@ export const dispatchNotification = async (notifLocal: any) => {
     autoCleanupNotifications(recipient_id);
   }
   
-  // Broadcast realtime for immediate UI update (like badges)
-  try {
-     broadcastChannel.send({ type: 'broadcast', event: 'new_notif', payload: notifLocal });
-  } catch(e) {}
+  // Broadcast local payload fields as well (for instant badge / client sync)
+  broadcastNotification(notifLocal);
 };
 
 export const autoCleanupNotifications = async (userId: string) => {

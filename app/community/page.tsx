@@ -1133,14 +1133,20 @@ export default function CanvasPage() {
     return typeof fallbackStr === 'string' ? fallbackStr : "Unknown Date";
   }
 
-  const seconds = Math.floor((Date.now() - ts) / 1000);
+  const diff = Date.now() - ts;
+  if (diff < 60000) return "just now";
+
+  const seconds = Math.floor(diff / 1000);
   const minutes = Math.floor(seconds / 60);
   const hours = Math.floor(minutes / 60);
   const days = Math.floor(hours / 24);
   const months = Math.floor(days / 30);
   const years = Math.floor(days / 365);
 
-  if (seconds < 60) return "just now";
+  if (isNaN(years) || isNaN(days) || isNaN(hours) || isNaN(minutes) || isNaN(seconds)) {
+    return "just now";
+  }
+
   if (minutes < 60) return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
   if (hours < 24) return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
   if (days < 7) return `${days} day${days !== 1 ? 's' : ''} ago`;
